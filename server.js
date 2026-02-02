@@ -232,9 +232,13 @@ app.get('/health', (req, res) => {
 const buildPath = path.join(__dirname, 'dist'); // Change to 'build' if using Create React App
 app.use(express.static(buildPath));
 
+// Serve static files from the React app (AFTER all API routes)
+const buildPath = path.join(__dirname, 'dist');
+app.use(express.static(buildPath));
+
 // The "catchall" handler: for any request that doesn't match API routes,
 // send back the React app's index.html file.
-app.get('*', (req, res) => {
+app.use((req, res) => {
   res.sendFile(path.join(buildPath, 'index.html'));
 });
 
