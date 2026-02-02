@@ -229,10 +229,6 @@ app.get('/health', (req, res) => {
 });
 
 // Serve static files from the React app (AFTER all API routes)
-const buildPath = path.join(__dirname, 'dist'); // Change to 'build' if using Create React App
-app.use(express.static(buildPath));
-
-// Serve static files from the React app (AFTER all API routes)
 const buildPath = path.join(__dirname, 'dist');
 app.use(express.static(buildPath));
 
