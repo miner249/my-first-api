@@ -229,7 +229,7 @@ app.get('/health', (req, res) => {
 });
 
 // Serve static files from the React app (AFTER all API routes)
-const buildPath = path.join(__dirname, 'dist');
+const buildPath = path.join(__dirname, 'client', 'dist');
 app.use(express.static(buildPath));
 
 // The "catchall" handler: for any request that doesn't match API routes,
