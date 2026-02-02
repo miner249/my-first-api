@@ -45,7 +45,7 @@ function App() {
       // Step 1: Fetch from Sportybet API (client-side to avoid CORS)
       console.log(`🔍 Fetching bet: ${shareCode.trim()}`);
       const timestamp = Date.now();
-      const sportyUrl = `https://www.sportybet.com/api/ng/orders/share/${shareCode.trim()}?_t=${timestamp}`;
+      const sportyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.sportybet.com/api/ng/orders/share/${shareCode.trim()}?_t=${timestamp}`)}`;
       
       const sportyResponse = await fetch(sportyUrl, {
         method: 'GET',
