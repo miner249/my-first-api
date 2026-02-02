@@ -42,10 +42,11 @@ function App() {
     setMessage('Fetching bet from Sportybet...');
 
     try {
-      // Step 1: Fetch from Sportybet API (client-side to avoid CORS)
+      // Fetch from Sportybet API (client-side to avoid CORS)
       console.log(`🔍 Fetching bet: ${shareCode.trim()}`);
       const timestamp = Date.now();
-      const sportyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.sportybet.com/api/ng/orders/share/${shareCode.trim()}?_t=${timestamp}`)}`;
+      // replace the sportyUrl line with:
+const sportyUrl = `https://corsproxy.io/?${encodeURIComponent(`https://www.sportybet.com/api/ng/orders/share/${shareCode.trim()}?_t=${timestamp}`)}`;
       
       const sportyResponse = await fetch(sportyUrl, {
         method: 'GET',
