@@ -111,9 +111,9 @@ function App() {
       margin: '0 auto',
       fontFamily: 'system-ui, -apple-system, sans-serif'
     }}>
-      <h1 style={{ textAlign: 'center' }}>⚽ Sportybet Tracker</h1>
+      <h1 style={{ textAlign: 'center' }}>⚽  Track IT</h1>
       <p style={{ textAlign: 'center', color: '#666' }}>
-        Track and view your Sportybet betting slips
+        Track and view your all betting slips
       </p>
       
       {/* Input Form */}
