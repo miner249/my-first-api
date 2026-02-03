@@ -103,23 +103,27 @@ app.post('/track-bet', async (req, res) => {
     }
 
     const sportyData = await sportyResponse.json();
-    console.log(`✅ [SERVER] Sportybet data received, code: ${sportyData.code}`);
+    console.log(`✅ [SERVER] Full Sportybet response:`, JSON.stringify(sportyData, null, 2));
 
-    if (sportyData.code !== 0) {
+    // Check for errors — some responses use "code", some don't
+    if (sportyData.code !== undefined && sportyData.code !== 0) {
       return res.json({ 
         success: false, 
         error: sportyData.msg || 'Invalid share code or bet not found' 
       });
     }
 
-    if (!sportyData.data) {
+    // The bet data could be in sportyData.data OR directly in sportyData itself
+    const betData = sportyData.data || sportyData;
+
+    if (!betData) {
       return res.json({ 
         success: false, 
         error: 'Bet data not found. The share code may be invalid.' 
       });
     }
 
-    const betData = sportyData.data;
+    console.log(`📦 [SERVER] Bet data keys:`, Object.keys(betData));
 
     // Save to database
     const betInsert = `
