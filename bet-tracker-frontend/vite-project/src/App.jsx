@@ -26,7 +26,7 @@ function App() {
     }
   };
 
-  // Submit new bet - simplified version that calls backend
+  // Submit new bet - calls backend only (NO SPORTYBET API CALLS HERE)
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -36,16 +36,21 @@ function App() {
     }
 
     setLoading(true);
-    setMessage('Tracking bet...');
+    setMessage('🔄 Tracking bet...');
 
     try {
+      console.log('[CLIENT] Calling backend /track-bet endpoint');
+      
       const response = await fetch(`${API_URL}/track-bet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shareCode: shareCode.trim() })
       });
       
+      console.log('[CLIENT] Backend response status:', response.status);
+      
       const data = await response.json();
+      console.log('[CLIENT] Backend response data:', data);
       
       if (data.success) {
         setMessage(`✅ Bet tracked successfully: ${shareCode.trim()}`);
@@ -56,7 +61,7 @@ function App() {
       }
       
     } catch (error) {
-      console.error('Error tracking bet:', error);
+      console.error('[CLIENT] Error tracking bet:', error);
       setMessage('❌ Network error. Please check your connection and try again.');
     } finally {
       setLoading(false);
@@ -111,9 +116,9 @@ function App() {
       margin: '0 auto',
       fontFamily: 'system-ui, -apple-system, sans-serif'
     }}>
-      <h1 style={{ textAlign: 'center' }}>⚽  Track IT</h1>
+      <h1 style={{ textAlign: 'center', color: '#4CAF50' }}>🎯 Track It</h1>
       <p style={{ textAlign: 'center', color: '#666' }}>
-        Track and view your all betting slips
+        Track and manage your betting slips
       </p>
       
       {/* Input Form */}
@@ -148,7 +153,7 @@ function App() {
               fontWeight: 'bold'
             }}
           >
-            {loading ? 'Tracking...' : 'Track Bet'}
+            {loading ? '🔄 Tracking...' : '➕ Track Bet'}
           </button>
         </div>
       </form>
