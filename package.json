@@ -1,11 +1,11 @@
 {
-  "name": "trackit-backend",
+  "name": "trackit",
   "version": "1.0.0",
   "description": "Track It - Bet Tracker",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build": "cd client && npm install && npm run build"
+    "build": "cd client && npm install && npx vite build"
   },
   "keywords": [],
   "author": "",
