@@ -285,14 +285,14 @@ if (fs.existsSync(buildPath)) {
   
   // The "catchall" handler: for any request that doesn't match API routes,
   // send back the React app's index.html file.
-  app.get('*', (req, res) => {
+  app.use((req, res) => {
     res.sendFile(path.join(buildPath, 'index.html'));
   });
 } else {
   console.warn('⚠️  Client build directory not found at:', buildPath);
   console.warn('⚠️  Run "npm run build" to build the frontend');
   
-  app.get('*', (req, res) => {
+  app.use((req, res) => {
     res.json({ 
       error: 'Frontend not built yet. Run: npm run build',
       buildPath: buildPath 
