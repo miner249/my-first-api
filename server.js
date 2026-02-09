@@ -1,3 +1,5 @@
+require('dotenv').config(); // Load environment variables first!
+
 const express = require('express');
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
@@ -66,41 +68,75 @@ function initializeDatabase() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 🆕 SOFASCORE API PROXY ROUTES
+// 🆕 FOOTBALL-DATA.ORG API PROXY ROUTES
 // ═══════════════════════════════════════════════════════════
 
-const SOFASCORE_BASE = 'https://api.sofascore.com';
-const SOFASCORE_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+const FOOTBALL_DATA_BASE = 'https://api.football-data.org/v4';
+const FOOTBALL_DATA_API_KEY = process.env.FOOTBALL_DATA_API_KEY;
+
+// Validate API key exists
+if (!FOOTBALL_DATA_API_KEY) {
+  console.error('❌ FOOTBALL_DATA_API_KEY is not set in environment variables!');
+  console.error('💡 Please create a .env file with your API key');
+  process.exit(1);
+}
+
+const FOOTBALL_DATA_HEADERS = {
+  'X-Auth-Token': FOOTBALL_DATA_API_KEY,
   'Accept': 'application/json',
-  'Referer': 'https://www.sofascore.com/',
-  'Origin': 'https://www.sofascore.com',
-  'Accept-Language': 'en-US,en;q=0.9',
 };
 
-// Helper function to fetch from SofaScore
-async function fetchSofaScore(endpoint) {
-  const url = `${SOFASCORE_BASE}${endpoint}`;
+// Simple in-memory cache to reduce API calls
+const cache = new Map();
+const CACHE_TTL = 30000; // 30 seconds
+
+function getCached(key) {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log(`✅ [CACHE] Using cached data for: ${key}`);
+    return cached.data;
+  }
+  return null;
+}
+
+function setCache(key, data) {
+  cache.set(key, { data, timestamp: Date.now() });
+}
+
+// Helper function to fetch from Football-Data.org
+async function fetchFootballData(endpoint) {
+  const url = `${FOOTBALL_DATA_BASE}${endpoint}`;
+  
+  // Check cache first
+  const cached = getCached(endpoint);
+  if (cached) {
+    return { error: null, data: cached };
+  }
   
   try {
-    console.log(`📡 [SOFASCORE] Fetching: ${endpoint}`);
+    console.log(`📡 [FOOTBALL-DATA] Fetching: ${endpoint}`);
     
     const response = await fetch(url, {
-      headers: SOFASCORE_HEADERS,
+      headers: FOOTBALL_DATA_HEADERS,
       timeout: 10000,
     });
 
     if (!response.ok) {
-      console.error(`❌ [SOFASCORE] HTTP ${response.status}`);
+      const errorText = await response.text();
+      console.error(`❌ [FOOTBALL-DATA] HTTP ${response.status}: ${errorText}`);
       return { error: `HTTP ${response.status}`, data: null };
     }
 
     const data = await response.json();
-    console.log(`✅ [SOFASCORE] Success`);
+    console.log(`✅ [FOOTBALL-DATA] Success - ${data.matches?.length || 0} matches`);
+    
+    // Cache the response
+    setCache(endpoint, data);
+    
     return { error: null, data };
 
   } catch (error) {
-    console.error(`❌ [SOFASCORE] Error:`, error.message);
+    console.error(`❌ [FOOTBALL-DATA] Error:`, error.message);
     return { error: error.message, data: null };
   }
 }
@@ -108,10 +144,10 @@ async function fetchSofaScore(endpoint) {
 // Route 1: Get live matches
 app.get('/api/sofascore/live-matches', async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const { error, data } = await fetchSofaScore(`/sport/football/scheduled-events/${today}`);
+    // Get matches with status IN_PLAY, PAUSED, or LIVE
+    const { error, data } = await fetchFootballData('/matches?status=LIVE');
 
-    if (error || !data || !data.events) {
+    if (error || !data || !data.matches) {
       return res.json({ 
         success: false, 
         error: error || 'No data',
@@ -119,19 +155,15 @@ app.get('/api/sofascore/live-matches', async (req, res) => {
       });
     }
 
-    const LIVE_STATUSES = [1, 2, 3]; // first half, halftime, second half
-    
-    const liveMatches = data.events
-      .filter(e => LIVE_STATUSES.includes(e.status?.code))
-      .map(e => ({
-        eventId: e.id,
-        home: e.homeTeam?.name || 'Unknown',
-        away: e.awayTeam?.name || 'Unknown',
-        league: e.tournament?.name || 'Unknown',
-        status: e.statusDescription || e.status?.description || 'Live',
-        homeScore: e.homeScore?.current ?? 0,
-        awayScore: e.awayScore?.current ?? 0,
-      }));
+    const liveMatches = data.matches.map(match => ({
+      eventId: match.id,
+      home: match.homeTeam?.name || match.homeTeam?.shortName || 'Unknown',
+      away: match.awayTeam?.name || match.awayTeam?.shortName || 'Unknown',
+      league: match.competition?.name || 'Unknown',
+      status: match.status === 'IN_PLAY' ? 'Live' : (match.status === 'PAUSED' ? 'HT' : match.status),
+      homeScore: match.score?.fullTime?.home ?? match.score?.halfTime?.home ?? 0,
+      awayScore: match.score?.fullTime?.away ?? match.score?.halfTime?.away ?? 0,
+    }));
 
     res.json({ 
       success: true, 
@@ -149,9 +181,13 @@ app.get('/api/sofascore/live-matches', async (req, res) => {
 app.get('/api/sofascore/today-matches', async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    const { error, data } = await fetchSofaScore(`/sport/football/scheduled-events/${today}`);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    
+    const { error, data } = await fetchFootballData(`/matches?dateFrom=${today}&dateTo=${tomorrowStr}`);
 
-    if (error || !data || !data.events) {
+    if (error || !data || !data.matches) {
       return res.json({ 
         success: false, 
         error: error || 'No data',
@@ -159,15 +195,18 @@ app.get('/api/sofascore/today-matches', async (req, res) => {
       });
     }
 
-    const matches = data.events.map(e => ({
-      eventId: e.id,
-      home: e.homeTeam?.name || 'Unknown',
-      away: e.awayTeam?.name || 'Unknown',
-      league: e.tournament?.name || 'Unknown',
-      startTime: e.startTimestamp ? new Date(e.startTimestamp * 1000).toISOString() : null,
-      status: e.statusDescription || 'Upcoming',
-      homeScore: e.homeScore?.current ?? null,
-      awayScore: e.awayScore?.current ?? null,
+    const matches = data.matches.map(match => ({
+      eventId: match.id,
+      home: match.homeTeam?.name || match.homeTeam?.shortName || 'Unknown',
+      away: match.awayTeam?.name || match.awayTeam?.shortName || 'Unknown',
+      league: match.competition?.name || 'Unknown',
+      startTime: match.utcDate || null,
+      status: match.status === 'TIMED' ? 'Upcoming' : 
+              match.status === 'IN_PLAY' ? 'Live' : 
+              match.status === 'FINISHED' ? 'Finished' : 
+              match.status === 'PAUSED' ? 'HT' : match.status,
+      homeScore: match.score?.fullTime?.home ?? match.score?.halfTime?.home ?? null,
+      awayScore: match.score?.fullTime?.away ?? match.score?.halfTime?.away ?? null,
     }));
 
     res.json({ 
@@ -186,9 +225,9 @@ app.get('/api/sofascore/today-matches', async (req, res) => {
 app.get('/api/sofascore/match-stats/:eventId', async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { error, data } = await fetchSofaScore(`/event/${eventId}/statistics`);
+    const { error, data } = await fetchFootballData(`/matches/${eventId}`);
 
-    if (error || !data || !data.groups) {
+    if (error || !data) {
       return res.json({ 
         success: false, 
         error: error || 'No stats data',
@@ -196,39 +235,34 @@ app.get('/api/sofascore/match-stats/:eventId', async (req, res) => {
       });
     }
 
-    const stats = {};
-    data.groups.forEach(group => {
-      if (group.statisticItems) {
-        group.statisticItems.forEach(item => {
-          stats[item.key] = {
-            home: item.homeValue,
-            away: item.awayValue,
-          };
-        });
-      }
-    });
-
+    // Note: Football-data.org free tier has limited statistics
     res.json({
       success: true,
       stats: {
         corners: {
-          home: parseInt(stats['corners']?.home) || 0,
-          away: parseInt(stats['corners']?.away) || 0,
-          total: (parseInt(stats['corners']?.home) || 0) + (parseInt(stats['corners']?.away) || 0),
+          home: 0, // Not available in free tier
+          away: 0,
+          total: 0,
         },
         goals: {
-          home: parseInt(stats['goals']?.home) || 0,
-          away: parseInt(stats['goals']?.away) || 0,
+          home: data.score?.fullTime?.home ?? 0,
+          away: data.score?.fullTime?.away ?? 0,
         },
         yellowCards: {
-          home: parseInt(stats['yellowCards']?.home) || 0,
-          away: parseInt(stats['yellowCards']?.away) || 0,
+          home: 0, // Not available in free tier
+          away: 0,
         },
         shotsOnTarget: {
-          home: parseInt(stats['shotsOnTarget']?.home) || 0,
-          away: parseInt(stats['shotsOnTarget']?.away) || 0,
+          home: 0, // Not available in free tier
+          away: 0,
         },
       },
+      matchInfo: {
+        status: data.status,
+        minute: data.minute || null,
+        referee: data.referees?.[0]?.name || 'N/A',
+        venue: data.venue || 'N/A',
+      }
     });
 
   } catch (error) {
@@ -237,7 +271,7 @@ app.get('/api/sofascore/match-stats/:eventId', async (req, res) => {
   }
 });
 
-// Route 4: Match user's bet teams to SofaScore events
+// Route 4: Match user's bet teams to Football-Data.org events
 app.post('/api/sofascore/find-match', async (req, res) => {
   try {
     const { homeTeam, awayTeam } = req.body;
@@ -247,9 +281,13 @@ app.post('/api/sofascore/find-match', async (req, res) => {
     }
 
     const today = new Date().toISOString().split('T')[0];
-    const { error, data } = await fetchSofaScore(`/sport/football/scheduled-events/${today}`);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    
+    const { error, data } = await fetchFootballData(`/matches?dateFrom=${today}&dateTo=${tomorrowStr}`);
 
-    if (error || !data || !data.events) {
+    if (error || !data || !data.matches) {
       return res.json({ success: false, error: error || 'No data', match: null });
     }
 
@@ -258,12 +296,15 @@ app.post('/api/sofascore/find-match', async (req, res) => {
     const bHome = normalize(homeTeam);
     const bAway = normalize(awayTeam);
 
-    const match = data.events.find(e => {
-      const mHome = normalize(e.homeTeam?.name || '');
-      const mAway = normalize(e.awayTeam?.name || '');
+    const match = data.matches.find(m => {
+      const mHome = normalize(m.homeTeam?.name || m.homeTeam?.shortName || '');
+      const mAway = normalize(m.awayTeam?.name || m.awayTeam?.shortName || '');
+      const mHomeTLA = normalize(m.homeTeam?.tla || '');
+      const mAwayTLA = normalize(m.awayTeam?.tla || '');
       
       return (
         (mHome === bHome && mAway === bAway) ||
+        (mHomeTLA === bHome && mAwayTLA === bAway) ||
         ((mHome.includes(bHome) || bHome.includes(mHome)) &&
          (mAway.includes(bAway) || bAway.includes(mAway)))
       );
@@ -274,13 +315,13 @@ app.post('/api/sofascore/find-match', async (req, res) => {
         success: true,
         match: {
           eventId: match.id,
-          home: match.homeTeam?.name,
-          away: match.awayTeam?.name,
-          league: match.tournament?.name,
-          startTime: match.startTimestamp ? new Date(match.startTimestamp * 1000).toISOString() : null,
-          homeScore: match.homeScore?.current ?? null,
-          awayScore: match.awayScore?.current ?? null,
-          status: match.statusDescription,
+          home: match.homeTeam?.name || match.homeTeam?.shortName,
+          away: match.awayTeam?.name || match.awayTeam?.shortName,
+          league: match.competition?.name,
+          startTime: match.utcDate,
+          homeScore: match.score?.fullTime?.home ?? match.score?.halfTime?.home ?? null,
+          awayScore: match.score?.fullTime?.away ?? match.score?.halfTime?.away ?? null,
+          status: match.status,
         },
       });
     } else {
@@ -485,7 +526,12 @@ app.delete('/bets/:id', (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Track It API is running' });
+  res.json({ 
+    status: 'OK', 
+    message: 'Track It API is running',
+    apiKey: FOOTBALL_DATA_API_KEY ? '✅ Configured' : '❌ Missing',
+    database: '✅ Connected'
+  });
 });
 
 // Serve React frontend
@@ -509,10 +555,15 @@ if (fs.existsSync(buildPath)) {
 app.listen(PORT, () => {
   console.log(`🚀 Track It running on http://localhost:${PORT}`);
   console.log(`📊 Database: trackit.db`);
-  console.log(`🔴 SofaScore API proxy enabled`);
+  console.log(`🔴 Football-Data.org API proxy enabled`);
+  console.log(`🔑 API Key: ${FOOTBALL_DATA_API_KEY ? '✅ Loaded from .env' : '❌ MISSING'}`);
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  db.close(() => process.exit(0));
+  console.log('\n👋 Shutting down gracefully...');
+  db.close(() => {
+    console.log('📊 Database connection closed');
+    process.exit(0);
+  });
 });
