@@ -2,17 +2,17 @@ import { useState, useEffect } from 'react';
 
 const API_URL = window.location.origin;
 
-// ─── LIVE MATCH TRACKER COMPONENT ────────────────────────
 function LiveMatchTracker({ bets }) {
   const [liveMatches, setLiveMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [source, setSource] = useState('unknown');
 
   // Fetch live matches every 30 seconds
   useEffect(() => {
     async function fetchLiveMatches() {
       try {
-        const response = await fetch(`${API_URL}/api/sofascore/live-matches`);
+        const response = await fetch(`${API_URL}/api/live-matches`);
         const data = await response.json();
 
         if (!data.success) {
@@ -22,6 +22,7 @@ function LiveMatchTracker({ bets }) {
         }
 
         setLiveMatches(data.matches || []);
+        setSource(data.source || 'unknown');
         setError(null);
         setLoading(false);
 
@@ -88,11 +89,19 @@ function LiveMatchTracker({ bets }) {
     );
   }
 
+  // Source badge color
+  const sourceColor = source === 'football-data' ? '#4ade80' : source === 'flashscore' ? '#fb923c' : '#64748b';
+
   return (
     <div style={styles.liveCard}>
       <div style={styles.liveHeader}>
         <span>🔴 Live Matches</span>
-        <span style={styles.liveBadge}>{liveMatches.length} live</span>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ ...styles.sourceBadge, background: sourceColor }}>
+            {source === 'football-data' ? 'Fast' : source === 'flashscore' ? 'Flash' : 'Live'}
+          </span>
+          <span style={styles.liveBadge}>{liveMatches.length}</span>
+        </div>
       </div>
 
       {liveMatches.length === 0 ? (
@@ -115,13 +124,19 @@ function LiveMatchTracker({ bets }) {
                 <div style={styles.liveScore}>
                   <span style={styles.liveTeam}>{match.home}</span>
                   <span style={styles.liveScoreNum}>
-                    {match.homeScore} - {match.awayScore}
+                    {match.homeScore ?? '-'} - {match.awayScore ?? '-'}
                   </span>
                   <span style={styles.liveTeam}>{match.away}</span>
                 </div>
               </div>
             ))}
           </div>
+
+          {liveMatches.length > 10 && (
+            <p style={{ textAlign: 'center', color: '#64748b', fontSize: '12px', marginTop: '12px' }}>
+              +{liveMatches.length - 10} more matches
+            </p>
+          )}
         </>
       )}
     </div>
@@ -153,6 +168,15 @@ const styles = {
     fontWeight: '700',
     padding: '4px 10px',
     borderRadius: '20px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+  sourceBadge: {
+    color: '#0f172a',
+    fontSize: '10px',
+    fontWeight: '700',
+    padding: '4px 8px',
+    borderRadius: '12px',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
   },
