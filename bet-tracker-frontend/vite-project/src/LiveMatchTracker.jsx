@@ -8,7 +8,7 @@ function LiveMatchTracker({ bets }) {
   const [error, setError] = useState(null);
   const [source, setSource] = useState('unknown');
 
-  // Fetch live matches every 30 seconds
+  // Fetch live matches every 40 seconds
   useEffect(() => {
     async function fetchLiveMatches() {
       try {
@@ -34,7 +34,7 @@ function LiveMatchTracker({ bets }) {
     }
 
     fetchLiveMatches();
-    const interval = setInterval(fetchLiveMatches, 30000); // Update every 30s
+    const interval = setInterval(fetchLiveMatches, 40000); // Update every 40s
     return () => clearInterval(interval);
   }, []);
 

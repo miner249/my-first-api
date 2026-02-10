@@ -8,7 +8,7 @@ function MyLiveBets() {
 
   useEffect(() => {
     fetchLiveBets();
-    const interval = setInterval(fetchLiveBets, 30000); // Update every 30s
+    const interval = setInterval(fetchLiveBets, 40000); // Update every 40s
     return () => clearInterval(interval);
   }, []);
 
