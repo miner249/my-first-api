@@ -211,8 +211,9 @@ setInterval(async () => {
  * Get live matches - tries Football-Data first, falls back to Apify
  */
 async function getLiveMatches() {
-  // Check cache first
   const now = Date.now();
+  
+  // Check cache first
   if (cache.liveMatches.data && (now - cache.liveMatches.timestamp) < cache.liveMatches.ttl) {
     console.log('💾 [Cache] Returning cached live matches');
     return { matches: cache.liveMatches.data, source: cache.liveMatches.source };
@@ -223,7 +224,10 @@ async function getLiveMatches() {
   // TRY 1: Football-Data.org
   const { error: fdError, data: fdData } = await fetchFootballData('/matches?status=LIVE');
 
-  if (!fdError && fdData && fdData.matches && fdData.matches.length > 0) {
+  // ✅ FIXED: Check if we got matches AND they're not empty
+  const fdHasMatches = !fdError && fdData && fdData.matches && fdData.matches.length > 0;
+
+  if (fdHasMatches) {
     const matches = fdData.matches.map(m => ({
       eventId: m.id,
       home: m.homeTeam?.name || m.homeTeam?.shortName || 'Unknown',
@@ -237,25 +241,29 @@ async function getLiveMatches() {
 
     console.log(`✅ [Hybrid] Football-Data returned ${matches.length} matches`);
     
-    // Cache it
     cache.liveMatches = { data: matches, timestamp: now, source: 'football-data' };
     return { matches, source: 'football-data' };
   }
 
-  // TRY 2: Apify/Flashscore (fallback) - BLOCKING VERSION
-  console.log('⚠️  [Hybrid] Football-Data failed, trying Flashscore...');
+  // TRY 2: Apify/Flashscore (fallback)
+  // ✅ NOW triggers if Football-Data has error OR no matches
+  if (!fdError && fdData && fdData.matches && fdData.matches.length === 0) {
+    console.log('⚠️  [Hybrid] Football-Data has no live matches, trying Flashscore...');
+  } else {
+    console.log('⚠️  [Hybrid] Football-Data failed, trying Flashscore...');
+  }
+
   const { error: apifyError, matches: apifyMatches } = await scrapeFlashscoreLive(false);
 
   if (!apifyError && apifyMatches && apifyMatches.length > 0) {
     console.log(`✅ [Hybrid] Flashscore returned ${apifyMatches.length} matches`);
     
-    // Cache it
     cache.liveMatches = { data: apifyMatches, timestamp: now, source: 'flashscore' };
     return { matches: apifyMatches, source: 'flashscore' };
   }
 
-  // Both failed
-  console.error('❌ [Hybrid] Both sources failed');
+  // Both failed or returned no matches
+  console.error('❌ [Hybrid] Both sources failed or returned no matches');
   return { matches: [], source: 'none' };
 }
 
