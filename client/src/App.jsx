@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import LiveMatchTracker from './LiveMatchTracker';
 import MyLiveBets from './MyLiveBets';
+import ScheduledMatches from './ScheduledMatches';
 
 const API_URL = window.location.origin;
 
@@ -508,6 +509,12 @@ function App() {
             🎯 Live Bets
           </button>
           <button 
+            style={currentPage === 'scheduled' ? {...styles.navBtn, ...styles.navBtnActive} : styles.navBtn}
+            onClick={() => setCurrentPage('scheduled')}
+          >
+            📅 Today
+          </button>
+          <button 
             style={currentPage === 'live' ? {...styles.navBtn, ...styles.navBtnActive} : styles.navBtn}
             onClick={() => setCurrentPage('live')}
           >
@@ -632,6 +639,7 @@ function App() {
         )}
 
         {currentPage === 'my-live-bets' && <MyLiveBets />}
+        {currentPage === 'scheduled' && <ScheduledMatches />}
         {currentPage === 'live' && <LiveMatchTracker bets={bets} />}
       </div>
 
@@ -681,7 +689,7 @@ function App() {
                 <p style={{ textAlign: 'center', color: '#475569', padding: '20px' }}>No matches found</p>
               )}
             </div>
-             
+
             <button 
               onClick={(e) => handleDelete(selectedBet.id, e)}
               style={{

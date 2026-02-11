@@ -89,7 +89,30 @@ app.get('/api/live-matches', async (req, res) => {
   }
 });
 
-// Route 2: Find a specific match by team names
+// Route 2: Get today's matches (all scheduled) - NEW: returns ALL matches
+app.get('/api/today-matches', async (req, res) => {
+  try {
+    const { matches, source } = await getLiveMatches();
+    
+    // Get today's date range
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    // For now, just return what we have from live matches
+    // Later we can add a separate scheduled matches endpoint
+    res.json({
+      success: true,
+      matches,
+      count: matches.length,
+      source,
+    });
+  } catch (error) {
+    console.error('❌ [API] Error in /today-matches:', error);
+    res.json({ success: false, error: error.message, matches: [], source: 'error' });
+  }
+});
 app.post('/api/find-match', async (req, res) => {
   try {
     const { homeTeam, awayTeam } = req.body;
@@ -334,12 +357,41 @@ app.get('/bets/:id', (req, res) => {
 
 app.delete('/bets/:id', (req, res) => {
   const { id } = req.params;
+  
+  console.log(`🗑️ [SERVER] Deleting bet ID: ${id}`);
+
+  // First delete matches
   db.run('DELETE FROM matches WHERE bet_id = ?', [id], (err) => {
-    if (err) return res.json({ success: false, error: 'Error deleting matches' });
+    if (err) {
+      console.error('❌ [SERVER] Error deleting matches:', err);
+      return res.json({ success: false, error: 'Error deleting matches' });
+    }
+    
+    console.log(`✅ [SERVER] Matches deleted for bet ${id}`);
+
+    // Then delete bet
     db.run('DELETE FROM bets WHERE id = ?', [id], function(err) {
-      if (err) return res.json({ success: false, error: 'Error deleting bet' });
-      if (this.changes === 0) return res.json({ success: false, error: 'Bet not found' });
-      res.json({ success: true, message: 'Bet deleted successfully' });
+      if (err) {
+        console.error('❌ [SERVER] Error deleting bet:', err);
+        return res.json({ success: false, error: 'Error deleting bet' });
+      }
+      
+      if (this.changes === 0) {
+        console.warn(`⚠️ [SERVER] Bet ${id} not found`);
+        return res.json({ success: false, error: 'Bet not found' });
+      }
+      
+      console.log(`✅ [SERVER] Bet ${id} deleted successfully`);
+      
+      // Verify deletion
+      db.get('SELECT * FROM bets WHERE id = ?', [id], (err, row) => {
+        if (row) {
+          console.error(`❌ [SERVER] Bet ${id} still exists after deletion!`);
+          return res.json({ success: false, error: 'Deletion failed - bet still exists' });
+        }
+        
+        res.json({ success: true, message: 'Bet deleted successfully' });
+      });
     });
   });
 });

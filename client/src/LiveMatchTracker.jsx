@@ -115,7 +115,7 @@ function LiveMatchTracker({ bets }) {
           )}
 
           <div style={styles.liveMatches}>
-            {liveMatches.slice(0, 10).map((match) => (
+            {liveMatches.map((match) => (
               <div key={match.eventId} style={styles.liveMatch}>
                 <div style={styles.liveMatchHeader}>
                   <span style={styles.liveLeague}>{match.league}</span>
@@ -131,12 +131,6 @@ function LiveMatchTracker({ bets }) {
               </div>
             ))}
           </div>
-
-          {liveMatches.length > 10 && (
-            <p style={{ textAlign: 'center', color: '#64748b', fontSize: '12px', marginTop: '12px' }}>
-              +{liveMatches.length - 10} more matches
-            </p>
-          )}
         </>
       )}
     </div>
