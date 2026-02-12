@@ -1,354 +1,399 @@
-# ⚡ TRACK IT - Betting Tracker UI
+# ⚡ TRACK IT - SportyBet Tracker
 
-> A modern, clean interface for tracking SportyBet wagers with real-time updates
-<img width="1271" height="506" alt="Screenshot Capture - 2026-02-12 - 06-42-09" src="https://github.com/user-attachments/assets/5f4a87ef-d3f9-4d0d-8d39-0bfabbc40070" />
+A modern, real-time betting tracker for SportyBet share codes. Track your bets, monitor live matches, and view upcoming games all in one sleek interface.
+
+<img width="1271" height="506" alt="Screenshot Capture - 2026-02-12 - 06-42-09" src="https://github.com/user-attachments/assets/f92621a0-d86f-495c-a3d6-648475e40a08" />
 
 
-<img width="1283" height="580" alt="Screenshot Capture - 2026-02-12 - 06-42-45" src="https://github.com/user-attachments/assets/32eadb0e-c180-4cc6-b71a-08b745b94b3a" />
-
----
-
-## 🎨 Design Philosophy
-
-**Track IT** embraces a clean, professional aesthetic that prioritizes usability and clarity. The design system is built on CSS variables, ensuring consistency and easy theming across all components.
-
-### **Core Principles**
-- **Minimal & Clean** - White space as a design element
-- **User-Focused** - Every interaction is intentional
-- **Performance First** - Lightweight, no external UI libraries
-- **Accessible** - WCAG 2.1 compliant color contrasts
 
 ---
 
-🚧 Roadmap
+## ✨ Features
 
- Dark mode toggle
- Bet history and analytics
- Push notifications for live matches
- Export bets to CSV/PDF
- Multi-language support
- Bet result tracking (Win/Loss)
- Profit/Loss calculator
- Betting stats dashboard
+### 🎯 **Bet Tracking**
+- Add SportyBet bets via share code
+- View all tracked bets in one dashboard
+- Real-time bet details with odds, stake, and potential winnings
+- Delete unwanted bets
 
+### 🔴 **Live Match Monitoring**
+- Automatic detection of live matches from your tracked bets
+- Real-time score updates every 40 seconds
+- Live match status indicators
+- Match your bets to ongoing games
 
-## 🌈 Design System
+### 📅 **Today's Schedule**
+- View all scheduled matches for the day
+- Filter by: All, Upcoming, Live, or Finished
+- Real-time match status updates
+- Countdown to kickoff times
+
+### 🎨 **Modern Design**
+- Clean, professional white interface
+- Royal Blue accent colors
+- Smooth animations and transitions
+- Mobile-first responsive design
+- Dark mode ready (coming soon)
+
+---
+
+## 🚀 Tech Stack
+
+### **Frontend**
+- **React 18+** - Modern UI library
+- **Vanilla CSS** - No frameworks, pure CSS with variables
+- **Vite** - Lightning-fast build tool
+
+### **Backend** 
+- Node.js / Express
+- REST API endpoints
+- Real-time data fetching
+
+### **Design System**
+- CSS Variables for theming
+- Mobile-first responsive design
+- Semantic HTML5
+- Accessible UI components
+
+---
+
+## 📦 Installation
+
+### **Prerequisites**
+- Node.js 16+ and npm/yarn
+- A backend API (see API Requirements below)
+
+### **Setup**
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/track-it.git
+cd track-it/client
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+```
+
+The app will run on `http://localhost:5173` by default.
+
+---
+
+## 🎯 Usage
+
+### **1. Track a Bet**
+1. Get a SportyBet share code from your betting slip
+2. Paste it into the input field on the home page
+3. Click "Track Bet"
+4. View your bet details instantly
+
+### **2. Monitor Live Bets**
+1. Navigate to the "Live Bets" tab
+2. See all your tracked bets that are currently live
+3. Real-time score updates every 40 seconds
+4. See your bet selections highlighted
+
+### **3. View Schedule**
+1. Go to the "Schedule" tab
+2. Filter matches by status (All, Upcoming, Live, Finished)
+3. Check kickoff times and current scores
+4. Plan your betting strategy
+
+---
+
+## 📁 Project Structure
+
+```
+client/
+├── src/
+│   ├── components/
+│   │   ├── Navbar.jsx           # Dynamic SVG header
+│   │   ├── MyLiveBets.jsx       # Live bets component
+│   │   └── ScheduledMatches.jsx # Schedule component
+│   ├── styles/
+│   │   ├── design.css           # Global design system
+│   │   ├── Navbar.css
+│   │   ├── MyLiveBets.css
+│   │   └── ScheduledMatches.css
+│   ├── App.jsx                  # Main app component
+│   ├── App.css                  # App-specific styles
+│   ├── main.jsx                 # React entry point
+│   └── index.css                # Global reset
+├── public/
+├── package.json
+└── vite.config.js
+```
+
+---
+
+## 🔌 API Requirements
+
+Your backend must provide these endpoints:
+
+### **Bets**
+```
+GET    /bets              # Get all tracked bets
+POST   /track-bet         # Track a new bet
+GET    /bets/:id          # Get bet details
+DELETE /bets/:id          # Delete a bet
+```
+
+### **Matches**
+```
+GET /api/live-matches           # Get all live matches
+GET /api/tracked-live-matches   # Get user's live bets
+GET /api/today-matches          # Get today's schedule
+```
+
+### **Example Response Format**
+
+**GET /bets**
+```json
+{
+  "success": true,
+  "bets": [
+    {
+      "id": 1,
+      "share_code": "ABC123XYZ",
+      "total_odds": "5.40",
+      "stake": "1000.00",
+      "potential_win": "5400.00",
+      "created_at": "2024-02-12T10:30:00Z",
+      "matches": [
+        {
+          "home_team": "Arsenal",
+          "away_team": "Chelsea",
+          "league": "Premier League",
+          "odds": "1.80",
+          "market_name": "Match Winner",
+          "selection": "Arsenal",
+          "match_time": "2024-02-12T15:00:00Z"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**GET /api/live-matches**
+```json
+{
+  "success": true,
+  "source": "football-data",
+  "matches": [
+    {
+      "eventId": "12345",
+      "league": "Premier League",
+      "home": "Arsenal",
+      "away": "Chelsea",
+      "homeScore": 2,
+      "awayScore": 1,
+      "status": "Live - 67'"
+    }
+  ]
+}
+```
+
+---
+
+## 🎨 Design System
 
 ### **Color Palette**
-
-```css
-Primary     #0052CC  Royal Blue     /* Accent, CTAs, Active States */
-Success     #16A34A  Green          /* Wins, Positive Actions */
-Danger      #DC2626  Red            /* Live, Loss, Delete */
-Neutral     #6B7280  Gray           /* Pending, Muted Text */
-Background  #FFFFFF  White          /* Main Canvas */
-Surface     #F4F4F4  Light Gray     /* Cards, Sections */
-```
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Royal Blue | `#0052CC` | Primary accent, links, active states |
+| White | `#FFFFFF` | Main background, cards |
+| Light Gray | `#F4F4F4` | Section backgrounds |
+| Green | `#16A34A` | Win status, positive values |
+| Red | `#DC2626` | Loss status, live indicators |
+| Gray | `#6B7280` | Pending status, muted text |
 
 ### **Typography**
+- **Font Family**: Inter, system-ui, sans-serif
+- **Headings**: 24-32px, Bold (700)
+- **Body**: 15px, Regular (400)
+- **Labels**: 12px, Semibold (600), Uppercase
 
-```
-Font Family: Inter (Google Fonts)
-Weights: 400 (Regular), 600 (Semibold), 700 (Bold), 800 (Extrabold)
+### **Spacing**
+- **xs**: 8px
+- **sm**: 12px
+- **md**: 16px
+- **lg**: 24px
+- **xl**: 32px
 
-Scale:
-- Display: 32px / -1px spacing
-- Heading: 24-28px
-- Body: 15px
-- Small: 12-14px
-```
+### **Components**
+- **Cards**: White background, subtle shadow, 10px border-radius
+- **Buttons**: 8px border-radius, hover lift effect
+- **Badges**: 20px border-radius, uppercase, 12px font
 
-### **Spacing Scale**
+---
 
-```
-8px   xs    Tight spacing
-12px  sm    Card padding, gaps
-16px  md    Default spacing
-24px  lg    Section spacing
-32px  xl    Major sections
-```
+## 📱 Responsive Design
 
-### **Shadows & Depth**
-
+### **Breakpoints**
 ```css
-sm   0 1px 3px rgba(0,0,0,0.05)    Navigation bar
-md   0 2px 8px rgba(0,0,0,0.05)    Cards at rest
-lg   0 4px 12px rgba(0,0,0,0.08)   Modals
-hover 0 4px 16px rgba(0,82,204,0.12) Interactive cards
+/* Tablet */
+@media (max-width: 768px) {
+  /* Stacks grids, full-width buttons */
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  /* Smaller fonts, compact spacing */
+  /* Prevents iOS zoom on inputs */
+}
+```
+
+### **Mobile Features**
+- ✅ Full-width buttons on small screens
+- ✅ Stacked card layouts
+- ✅ Optimized touch targets (min 44px)
+- ✅ Prevents zoom on iOS inputs
+- ✅ Responsive SVG navbar
+
+---
+
+## ⚙️ Configuration
+
+### **API URL**
+The app uses `window.location.origin` by default. To change:
+
+```javascript
+// In App.jsx, MyLiveBets.jsx, ScheduledMatches.jsx
+const API_URL = "https://your-api-url.com";
+```
+
+### **Update Intervals**
+```javascript
+// Live bets: 40 seconds
+setInterval(fetchLiveBets, 40000);
+
+// Today's matches: 60 seconds
+setInterval(fetchScheduledMatches, 60000);
+
+// Live matches: 30 seconds
+setInterval(fetchLiveMatches, 30000);
 ```
 
 ---
 
-## ✨ Key Components
+## 🚧 Roadmap
 
-### **1. Dynamic SVG Navigation**
-- Animated active state indicators
-- Live match pulse effect
-- Responsive scaling
-- No external dependencies
-
-```jsx
-<Navbar 
-  currentPage="home"
-  onNavigate={handleNav}
-  liveCount={3}  // Shows pulsing indicator
-/>
-```
-
-### **2. Bet Cards**
-- Hover lift animation
-- Clear information hierarchy
-- One-tap actions on mobile
-- Color-coded status badges
-
-### **3. Stats Dashboard**
-- Grid-based layout
-- Large, readable numbers
-- Color-coded by meaning
-- Responsive columns
-
-### **4. Live Match Updates**
-- Auto-refresh every 40s
-- Real-time score display
-- Match status indicators
-- Bet matching algorithm
+- [ ] Dark mode toggle
+- [ ] Bet history and analytics
+- [ ] Push notifications for live matches
+- [ ] Export bets to CSV/PDF
+- [ ] Multi-language support
+- [ ] Bet result tracking (Win/Loss)
+- [ ] Profit/Loss calculator
+- [ ] Betting stats dashboard
 
 ---
 
-## 🎯 UI Patterns
+## 🤝 Contributing
 
-### **Buttons**
-```css
-Primary:   Blue background, white text, subtle lift on hover
-Secondary: Gray background, dark text, border on focus
-Danger:    Transparent with red border, red text, red bg on hover
-```
+Contributions are welcome! Please follow these steps:
 
-### **Badges**
-```css
-Pending:   Light gray background, gray text
-Win:       Light green background, green text
-Loss:      Light red background, red text
-Live:      Red background, white text, pulse animation
-```
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-### **Cards**
-```css
-Default:   White bg, 1px border, subtle shadow
-Hover:     Lift 2px, accent shadow, border color change
-Active:    Accent border-left for live matches
-```
+### **Code Style**
+- Use semantic HTML
+- Follow BEM naming convention for CSS
+- Keep components small and focused
+- Write descriptive commit messages
+- Add comments for complex logic
 
 ---
 
-## 📱 Responsive Behavior
+## 🐛 Known Issues
 
-### **Desktop (>768px)**
-- 3-column stat grid
-- Side-by-side actions
-- Horizontal navigation
-- Hover states active
+- None currently! 🎉
 
-### **Tablet (768px)**
-- 2-column layouts
-- Stacked forms
-- Full-width buttons
-- Touch-optimized targets
-
-### **Mobile (<480px)**
-- Single column everything
-- Bottom sheet modals
-- Larger touch targets (44px min)
-- 16px inputs (prevents iOS zoom)
+If you find a bug, please [open an issue](https://github.com/miner249/track-it/issues).
 
 ---
 
-## 🎭 Animations & Transitions
+## 📄 License
 
-### **Micro-interactions**
-```css
-Hover:      0.2s ease transform + shadow
-Click:      0.15s ease scale
-Focus:      0.2s ease border-color
-Pulse:      2s infinite opacity (live indicator)
-```
-
-### **Page Transitions**
-- Instant tab switches (no loading states)
-- Smooth modal fade-in
-- Staggered card loading (future enhancement)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🏗️ Component Architecture
+## 👤 Author
+ ZAKARIYAU MUBARAK
 
-```
-App.jsx (Container)
-├── Navbar (Stateful)
-│   └── SVG with dynamic props
-├── Home View
-│   ├── Track Form
-│   ├── Stats Grid
-│   └── Bets List
-├── Live Bets View
-│   └── Live Match Cards
-└── Schedule View
-    ├── Filter Tabs
-    └── Match Cards
-```
-
-### **State Management**
-- React Hooks (useState, useEffect)
-- No external state library
-- Component-level state
-- Prop drilling for simplicity
+- GitHub: (https://github.com/miner249)- Twitter: (https://twitter.com/MUBARAK_yomide)
 
 ---
 
-## 🎨 CSS Methodology
+## 🙏 Acknowledgments
 
-### **Architecture**
-```
-design.css (Global Variables + Base)
-├── Typography
-├── Color System
-├── Spacing Scale
-├── Utility Classes
-└── Component Primitives
-
-Component.css (Scoped Styles)
-├── Layout
-├── Variants
-└── Responsive
-```
-
-### **Naming Convention**
-```css
-.component-name              Block
-.component-name__element     Element
-.component-name--modifier    Modifier
-```
-
-Example:
-```css
-.bet-card                    /* Block */
-.bet-card__header           /* Element */
-.bet-card--live             /* Modifier */
-```
+- SportyBet for the betting platform
+- Football-Data.org API for live match data
+- Inter font family by Rasmus Andersson
+- React team for the amazing framework
 
 ---
 
-## 🌟 Highlights
+## 📸 Screenshots
 
-### **No Framework UI**
-Built with vanilla CSS and CSS variables. No Bootstrap, no Tailwind, no Material-UI. Full control over every pixel.
+### Home Dashboard
+<img width="1271" height="506" alt="Screenshot Capture - 2026-02-12 - 06-42-09" src="https://github.com/user-attachments/assets/2829de4e-3401-4edd-89f9-48edba2dd42e" />
+
+
+### Live Bets
+<img width="1292" height="501" alt="Screenshot Capture - 2026-02-12 - 07-13-20" src="https://github.com/user-attachments/assets/ef8c6cc4-6d38-413f-9b09-100090ee57c4" />
+
+### Today's Schedule
+<img width="1283" height="580" alt="Screenshot Capture - 2026-02-12 - 06-42-45" src="https://github.com/user-attachments/assets/9da193f2-7ed5-4a9f-b212-c517d94060be" />
+
+
+### Bet Details Modal
+<img width="1206" height="617" alt="Screenshot Capture - 2026-02-12 - 07-12-41" src="https://github.com/user-attachments/assets/985791ab-071a-4d57-bc96-ae07ff4498cb" />
+
+
+---
+
+## 💡 Tips
+
+### **For Best Experience**
+1. Track 3-5 bets at a time for easy monitoring
+2. Use the Live Bets tab during match hours
+3. Check the Schedule tab to plan your bets
+4. Delete old/lost bets to keep dashboard clean
 
 ### **Performance**
-- Zero runtime CSS-in-JS overhead
-- Class-based styling (faster than inline)
-- Minimal re-renders
-- Optimized asset loading
-
-### **Accessibility**
-- Semantic HTML5
-- ARIA labels where needed
-- Keyboard navigation support
-- Focus states on all interactive elements
-- Color contrast ratios pass WCAG AA
-
-### **Maintainability**
-- CSS variables for easy theming
-- Consistent naming conventions
-- Modular component styles
-- Self-documenting code
+- The app auto-refreshes data at regular intervals
+- Live updates use minimal bandwidth
+- All data is fetched from your backend API
 
 ---
 
-## 🚀 Performance Metrics
+## 🔐 Privacy
 
-```
-Lighthouse Score:
-Performance:   95+
-Accessibility: 100
-Best Practices: 100
-SEO:          95+
-
-Bundle Size:
-CSS:  ~8KB gzipped
-JS:   ~45KB gzipped (React + App)
-```
+- No user data is stored in the frontend
+- All bet data is managed by your backend
+- No third-party tracking or analytics (unless you add them)
+- Share codes are only sent to your API
 
 ---
-
-## 🎓 Design Decisions
-
-### **Why White Background?**
-Better readability in bright environments, cleaner aesthetic, less eye strain for data-heavy interfaces.
-
-### **Why Royal Blue?**
-Professional, trustworthy, high contrast with white, distinct from common green/red status colors.
-
-### **Why No Animation Library?**
-CSS transitions are sufficient, reduce bundle size, better performance, more control.
-
-### **Why Grid Over Flexbox?**
-Stats cards benefit from equal widths, easier responsive behavior, cleaner code.
-
----
-
-## 📐 Design Files
-
-Design system variables available in:
-```
-src/styles/design.css
-```
-
-To use in your components:
-```css
-color: var(--color-accent);
-padding: var(--spacing-md);
-font-size: var(--font-size-base);
-```
-
----
-
-## 🎨 Future Enhancements
-
-- [ ] Dark mode with CSS variable swap
-- [ ] Skeleton loading states
-- [ ] Confetti animation on wins
-- [ ] Smooth number counter animations
-- [ ] Chart.js integration for stats
-- [ ] Custom icon set (SVG sprites)
-
----
-
-## 💼 For Designers
-
-
-### **Style Guide**
-[View Documentation →](./STYLEGUIDE.md)
-
-### **Component Library**
-All components documented with variants and states.
-
----
-
-## 👨‍🎨 Credits
-
-**Design & Development**: Your Name  
-**Font**: [Inter by Rasmus Andersson](https://rsms.me/inter/)  
-**Icons**: Custom SVG  
-**Inspiration**: Modern fintech apps, betting platforms
 
 ---
 
 <div align="center">
 
-**A case study in clean, functional design**
-
 Built with ❤️ and attention to detail
+View Live Demo → [https://trackit-ro60.onrender.com/] 
 
-[View Live Demo →](https://trackit-ro60.onrender.com/)
+⭐ Star this repo if you find it useful!
 
 </div>
