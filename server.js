@@ -7,8 +7,7 @@ const path = require('path');
 const fetch = require('node-fetch');
 const fs = require('fs');
 
-// Import hybrid live tracker
-const { getLiveMatches, findMatch, getMatchStats } = require('./liveTracker');
+const { getLiveMatches, getTodayMatchesCached, getMatchDetails } = require('./lib/api');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,11 +71,10 @@ function initializeDatabase() {
 // 🔴 LIVE TRACKING API ROUTES (HYBRID)
 // ═══════════════════════════════════════════════════════════
 
-// Route 1: Get all live matches
-app.get('/api/live-matches', async (req, res) => {
+async function handleLive(req, res) {
   try {
     const { matches, source } = await getLiveMatches();
-    
+
     res.json({
       success: true,
       matches,
@@ -84,24 +82,15 @@ app.get('/api/live-matches', async (req, res) => {
       source,
     });
   } catch (error) {
-    console.error('❌ [API] Error in /live-matches:', error);
+    console.error('❌ [API] Error in /live:', error);
     res.json({ success: false, error: error.message, matches: [], source: 'error' });
   }
-});
+}
 
-// Route 2: Get today's matches (all scheduled) - NEW: returns ALL matches
-app.get('/api/today-matches', async (req, res) => {
+async function handleToday(req, res) {
   try {
-    const { matches, source } = await getLiveMatches();
-    
-    // Get today's date range
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    // For now, just return what we have from live matches
-    // Later we can add a separate scheduled matches endpoint
+    const { matches, source } = await getTodayMatchesCached();
+
     res.json({
       success: true,
       matches,
@@ -109,47 +98,34 @@ app.get('/api/today-matches', async (req, res) => {
       source,
     });
   } catch (error) {
-    console.error('❌ [API] Error in /today-matches:', error);
+    console.error('❌ [API] Error in /today:', error);
     res.json({ success: false, error: error.message, matches: [], source: 'error' });
   }
-});
-app.post('/api/find-match', async (req, res) => {
+}
+
+// Route 1: Get all live matches (Live tab)
+app.get('/api/live', handleLive);
+// Backward-compatible alias
+app.get('/api/live-matches', handleLive);
+
+// Route 2: Daily cached "All" matches
+app.get('/api/today', handleToday);
+// Backward-compatible alias
+app.get('/api/today-matches', handleToday);
+
+app.get('/api/match/:id', async (req, res) => {
   try {
-    const { homeTeam, awayTeam } = req.body;
-
-    if (!homeTeam || !awayTeam) {
-      return res.json({ success: false, error: 'Missing team names', match: null });
-    }
-
-    const match = await findMatch(homeTeam, awayTeam);
+    const { id } = req.params;
+    const { match, source } = await getMatchDetails(id);
 
     if (match) {
-      res.json({ success: true, match });
+      res.json({ success: true, match, source });
     } else {
       res.json({ success: false, match: null, error: 'Match not found' });
     }
   } catch (error) {
-    console.error('❌ [API] Error in /find-match:', error);
+    console.error('❌ [API] Error in /match/:id:', error);
     res.json({ success: false, error: error.message, match: null });
-  }
-});
-
-// Route 3: Get match statistics
-app.get('/api/match-stats/:eventId', async (req, res) => {
-  try {
-    const { eventId } = req.params;
-    const { source } = req.query;
-
-    const stats = await getMatchStats(eventId, source || 'football-data');
-
-    if (stats) {
-      res.json({ success: true, stats });
-    } else {
-      res.json({ success: false, stats: null, error: 'Stats not available' });
-    }
-  } catch (error) {
-    console.error('❌ [API] Error in /match-stats:', error);
-    res.json({ success: false, error: error.message, stats: null });
   }
 });
 
@@ -174,8 +150,8 @@ app.get('/api/tracked-live-matches', async (req, res) => {
         for (const betMatch of betMatches) {
           const liveMatch = liveMatches.find(live => {
             const normalize = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            const liveHome = normalize(live.home);
-            const liveAway = normalize(live.away);
+            const liveHome = normalize(live.home || live.home_team || '');
+            const liveAway = normalize(live.away || live.away_team || '');
             const betHome = normalize(betMatch.home_team);
             const betAway = normalize(betMatch.away_team);
 
@@ -190,7 +166,13 @@ app.get('/api/tracked-live-matches', async (req, res) => {
             trackedLive.push({
               betId: bet.id,
               shareCode: bet.share_code,
-              match: liveMatch,
+              match: {
+                ...liveMatch,
+                home: liveMatch.home || liveMatch.home_team,
+                away: liveMatch.away || liveMatch.away_team,
+                homeScore: liveMatch.homeScore ?? liveMatch.home_score,
+                awayScore: liveMatch.awayScore ?? liveMatch.away_score,
+              },
               selection: betMatch.selection,
               marketName: betMatch.market_name,
             });
