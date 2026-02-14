@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import MyLiveBets from './components/MyLiveBets';
 import ScheduledMatches from './components/ScheduledMatches';
+import MatchPage from './pages/match/[id]';
 import './styles/design.css';
 import './App.css';
 
@@ -14,6 +15,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [selectedBet, setSelectedBet] = useState(null);
   const [currentPage, setCurrentPage] = useState('home');
+  const [selectedMatchId, setSelectedMatchId] = useState('');
 
   useEffect(() => {
     fetchBets();
@@ -240,7 +242,17 @@ function App() {
         )}
 
         {currentPage === 'my-live-bets' && <MyLiveBets />}
-        {currentPage === 'scheduled' && <ScheduledMatches />}
+        {currentPage === 'scheduled' && !selectedMatchId && (
+          <ScheduledMatches onOpenMatch={setSelectedMatchId} />
+        )}
+        {currentPage === 'scheduled' && selectedMatchId && (
+          <>
+            <button className="btn btn-secondary" onClick={() => setSelectedMatchId('')} style={{ marginBottom: '12px' }}>
+              ← Back to Today Matches
+            </button>
+            <MatchPage matchId={selectedMatchId} />
+          </>
+        )}
       </div>
 
       {/* Modal for Bet Details */}

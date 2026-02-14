@@ -45,6 +45,9 @@
 
 .schedule-match-card {
   position: relative;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--color-border);
 }
 
 .match-live {
