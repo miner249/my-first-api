@@ -1,7 +1,7 @@
 {
   "name": "trackit",
   "version": "1.0.0",
-  "description": "Track It - Bet Tracker",
+  "description": "Track It - Multi-bookmaker bet tracker",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
