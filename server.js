@@ -63,15 +63,25 @@ async function bootstrap() {
   });
 
   app.get('/live', async (_, res) => {
-    const cached = liveEngine.getCachedLive();
-    if (cached.matches.length) {
-      return res.json({ success: true, ...cached, cache: true });
+    try {
+     const cached = liveEngine.getCachedLive();
+     if (cached.matches.length) {
+       return res.json({ success: true, ...cached, cache: true });
     }
 
     const snapshot = await liveDataProvider.fetchLiveSnapshot();
     res.json({ success: true, ...snapshot, cache: false });
-  });
+      
+  } catch (error) {
+    console.error( 'Live fetch failed:', error);
 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch live snapshot'
+    });
+  }    
+});
+  
   app.get('/schedule', async (req_, res) => {
     try {
      const snapshot = await liveDataProvider.fetchScheduleSnapshot();
