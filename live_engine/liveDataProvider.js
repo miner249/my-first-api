@@ -1,42 +1,22 @@
 /**
  * live_engine/liveDataProvider.js
- *
- * Thin adapter that turns liveTracker.js functions into the snapshot
- * interface that server.js and liveBetEngine.js expect.
- *
- * fetchLiveSnapshot()     → { matches, source, fetchedAt }
- * fetchScheduleSnapshot() → { matches, source, fetchedAt }
  */
 
 const { getLiveMatches, findMatch, getMatchStats } = require('../live_engine/liveTracker');
 
-// ──────────────────────────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────────────────────────
-
 function stamp(matches, source) {
   return {
-    matches: matches || [],
-    source:  source  || 'none',
+    matches:   matches || [],
+    source:    source  || 'none',
     fetchedAt: new Date().toISOString(),
-    count: (matches || []).length,
+    count:     (matches || []).length,
   };
 }
-
-// ──────────────────────────────────────────────────────────────────
-// Live snapshot  (used by GET /live)
-// ──────────────────────────────────────────────────────────────────
 
 async function fetchLiveSnapshot() {
   const { matches, source } = await getLiveMatches();
   return stamp(matches, source);
 }
-
-// ──────────────────────────────────────────────────────────────────
-// Schedule snapshot  (used by GET /schedule)
-// Flashscore/Football-Data don't expose a combined schedule endpoint
-// in liveTracker, so we fall back to Football-Data's today fixture list.
-// ──────────────────────────────────────────────────────────────────
 
 async function fetchScheduleSnapshot() {
   const fetch = require('node-fetch');
@@ -72,15 +52,16 @@ async function fetchScheduleSnapshot() {
 
     const data = await response.json();
     const matches = (data.matches || []).map((m) => ({
-      eventId:   m.id,
-      home:      m.homeTeam?.name  || m.homeTeam?.shortName  || 'Unknown',
-      away:      m.awayTeam?.name  || m.awayTeam?.shortName  || 'Unknown',
-      league:    m.competition?.name || 'Unknown',
-      status:    m.status,
-      startTime: m.utcDate,
-      homeScore: m.score?.fullTime?.home ?? null,
-      awayScore: m.score?.fullTime?.away ?? null,
-      source:    'football-data',
+      id:         m.id,
+      home_team:  m.homeTeam?.name      || m.homeTeam?.shortName  || 'Unknown',
+      away_team:  m.awayTeam?.name      || m.awayTeam?.shortName  || 'Unknown',
+      league:     m.competition?.name   || 'Unknown',
+      status:     m.status,
+      status_time: m.status,
+      start_time: m.utcDate,
+      home_score: m.score?.fullTime?.home ?? null,
+      away_score: m.score?.fullTime?.away ?? null,
+      source:     'football-data',
     }));
 
     console.log(`✅ [Schedule] ${matches.length} fixtures from Football-Data`);
@@ -91,10 +72,6 @@ async function fetchScheduleSnapshot() {
     return stamp([], 'error');
   }
 }
-
-// ──────────────────────────────────────────────────────────────────
-// Re-export lower-level helpers for liveBetEngine
-// ──────────────────────────────────────────────────────────────────
 
 module.exports = {
   fetchLiveSnapshot,
