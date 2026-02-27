@@ -212,7 +212,70 @@ async function bootstrap() {
   // ──────────────────────────────────────────────────────────────
   // Start
   // ──────────────────────────────────────────────────────────────
-  liveEngine.start();
+  const path = require('path');
+
+// ── API aliases the frontend expects ──────────────────
+app.get('/api/live', async (_, res) => {
+  try {
+    const snapshot = await liveDataProvider.fetchLiveSnapshot();
+    res.json({ success: true, ...snapshot });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get('/api/today', async (_, res) => {
+  try {
+    const snapshot = await liveDataProvider.fetchScheduleSnapshot();
+    res.json({ success: true, ...snapshot });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get('/api/match/:id', async (req, res) => {
+  try {
+    const snapshot = await liveDataProvider.fetchLiveSnapshot();
+    const match = (snapshot.matches || []).find(m => String(m.id) === String(req.params.id));
+    if (!match) return res.status(404).json({ success: false, error: 'Match not found' });
+    res.json({ success: true, match });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get('/api/tracked-live-matches', async (_, res) => {
+  try {
+    const bets = await store.getBets();
+    const snapshot = await liveDataProvider.fetchLiveSnapshot();
+    const liveMatches = snapshot.matches || [];
+    const matches = bets.flatMap(bet =>
+      (bet.selections || []).map(sel => {
+        const live = liveMatches.find(m =>
+          m.home_team?.includes(sel.home_team) || m.away_team?.includes(sel.away_team)
+        );
+        if (!live) return null;
+        return { shareCode: bet.bookingCode, match: live, marketName: sel.market_name, selection: sel.selection };
+      }).filter(Boolean)
+    );
+    res.json({ success: true, matches });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── Serve React frontend ───────────────────────────────
+app.use(express.static(path.join(__dirname, 'client/dist')));
+app.get('*', (_, res) => {
+  res.sendFile(path.join(__dirname, 'client/dist', 'index.html'));
+});
+```
+
+Then make sure your **Render build command** is:
+```
+npm install && cd client && npm install && npx vite build
+
+liveEngine.start();
 
   app.listen(PORT, () => {
     console.log(`TrackIT backend listening on http://localhost:${PORT}`);
