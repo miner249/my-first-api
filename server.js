@@ -6,10 +6,10 @@ const path         = require('path');
 const EventEmitter = require('events');
 
 const { getParser, getSupportedPlatforms } = require('./parsers');
-const { createStore }      = require('./database/store');
-const LiveBetEngine        = require('./live_engine/liveBetEngine');
-const liveDataProvider     = require('./live_engine/liveDataProvider');
-const NotificationService  = require('./notifications/notificationService');
+const { createStore }     = require('./database/store');
+const LiveBetEngine       = require('./live_engine/liveBetEngine');
+const liveDataProvider    = require('./live_engine/liveDataProvider');
+const NotificationService = require('./notifications/notificationService');
 
 const PORT = process.env.PORT || 3000;
 
@@ -71,7 +71,7 @@ async function bootstrap() {
 
       const result = await parser.parse(shareCode);
 
-      // Support parsers that return a plain array or an object
+      // Support parsers that return plain array or full object
       const selections   = Array.isArray(result) ? result : (result.selections || result.matches || []);
       const totalOdds    = result.totalOdds    || 0;
       const stake        = result.stake        || 0;
@@ -107,12 +107,13 @@ async function bootstrap() {
       const bets = await store.getBets();
       res.json({ success: true, count: bets.length, bets });
     } catch (error) {
+      console.error('❌ [GET /bets]', error.message);
       res.status(500).json({ success: false, error: error.message });
     }
   });
 
   // ──────────────────────────────────────────────────────────────
-  // Get single bet by ID
+  // Get single bet
   // ──────────────────────────────────────────────────────────────
   app.get('/bets/:id', async (req, res) => {
     try {
@@ -122,6 +123,7 @@ async function bootstrap() {
       }
       res.json({ success: true, bet });
     } catch (error) {
+      console.error('❌ [GET /bets/:id]', error.message);
       res.status(500).json({ success: false, error: error.message });
     }
   });
@@ -137,6 +139,7 @@ async function bootstrap() {
       }
       res.json({ success: true, message: 'Bet deleted' });
     } catch (error) {
+      console.error('❌ [DELETE /bets/:id]', error.message);
       res.status(500).json({ success: false, error: error.message });
     }
   });
@@ -179,10 +182,7 @@ async function bootstrap() {
       const { betId, channel = 'console', target } = req.body;
 
       if (!betId || !target) {
-        return res.status(400).json({
-          success: false,
-          error:   'betId and target are required',
-        });
+        return res.status(400).json({ success: false, error: 'betId and target are required' });
       }
 
       const bet = await store.getBetById(betId);
@@ -202,7 +202,7 @@ async function bootstrap() {
   });
 
   // ──────────────────────────────────────────────────────────────
-  // SSE – Server-Sent Events stream
+  // SSE – Server-Sent Events
   // ──────────────────────────────────────────────────────────────
   app.get('/events', (req, res) => {
     res.setHeader('Content-Type',      'text/event-stream');
@@ -244,6 +244,7 @@ async function bootstrap() {
       const snapshot = await liveDataProvider.fetchLiveSnapshot();
       res.json({ success: true, ...snapshot });
     } catch (e) {
+      console.error('❌ [GET /api/live]', e.message);
       res.status(500).json({ success: false, error: e.message });
     }
   });
@@ -253,6 +254,7 @@ async function bootstrap() {
       const snapshot = await liveDataProvider.fetchScheduleSnapshot();
       res.json({ success: true, ...snapshot });
     } catch (e) {
+      console.error('❌ [GET /api/today]', e.message);
       res.status(500).json({ success: false, error: e.message });
     }
   });
@@ -263,9 +265,12 @@ async function bootstrap() {
       const match    = (snapshot.matches || []).find(
         m => String(m.id) === String(req.params.id)
       );
-      if (!match) return res.status(404).json({ success: false, error: 'Match not found' });
+      if (!match) {
+        return res.status(404).json({ success: false, error: 'Match not found' });
+      }
       res.json({ success: true, match });
     } catch (e) {
+      console.error('❌ [GET /api/match/:id]', e.message);
       res.status(500).json({ success: false, error: e.message });
     }
   });
@@ -279,12 +284,12 @@ async function bootstrap() {
       const matches = bets.flatMap(bet =>
         (bet.selections || []).map(sel => {
           const live = liveMatches.find(m =>
-            m.home_team?.includes(sel.home_team) ||
-            m.away_team?.includes(sel.away_team)
+            m.home_team?.toLowerCase().includes(sel.home_team?.toLowerCase()) ||
+            m.away_team?.toLowerCase().includes(sel.away_team?.toLowerCase())
           );
           if (!live) return null;
           return {
-            shareCode:  bet.shareCode || bet.bookingCode,
+            shareCode:  bet.share_code || bet.bookingCode,
             platform:   bet.platform,
             match:      live,
             marketName: sel.market_name,
@@ -295,6 +300,7 @@ async function bootstrap() {
 
       res.json({ success: true, matches });
     } catch (e) {
+      console.error('❌ [GET /api/tracked-live-matches]', e.message);
       res.status(500).json({ success: false, error: e.message });
     }
   });
@@ -313,7 +319,8 @@ async function bootstrap() {
   liveEngine.start();
 
   app.listen(PORT, () => {
-    console.log(`TrackIT backend listening on http://localhost:${PORT}`);
+    console.log(`🚀 TrackIT backend listening on http://localhost:${PORT}`);
+    console.log(`   Platforms: ${getSupportedPlatforms().join(', ')}`);
   });
 }
 
