@@ -271,10 +271,6 @@ app.get('*', (_, res) => {
 });
 ```
 
-Then make sure your **Render build command** is:
-```
-npm install && cd client && npm install && npx vite build
-
 liveEngine.start();
 
   app.listen(PORT, () => {
