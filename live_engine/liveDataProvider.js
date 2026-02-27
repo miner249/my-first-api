@@ -15,7 +15,23 @@ function stamp(matches, source) {
 
 async function fetchLiveSnapshot() {
   const { matches, source } = await getLiveMatches();
-  return stamp(matches, source);
+
+  const normalized = (matches || []).map(m => ({
+    id:          m.eventId    || m.id,
+    home_team:   m.home_team  || m.home  || 'Unknown',
+    away_team:   m.away_team  || m.away  || 'Unknown',
+    league:      m.league     || 'Unknown',
+    status:      m.status,
+    status_time: m.status_time || m.status,
+    home_score:  m.homeScore  ?? m.home_score ?? null,
+    away_score:  m.awayScore  ?? m.away_score ?? null,
+    start_time:  m.startTime  || m.start_time || null,
+    history:     m.history    || [],
+    stats:       m.stats      || {},
+    source:      m.source     || source,
+  }));
+
+  return stamp(normalized, source);
 }
 
 async function fetchScheduleSnapshot() {
@@ -51,17 +67,18 @@ async function fetchScheduleSnapshot() {
     }
 
     const data = await response.json();
+
     const matches = (data.matches || []).map((m) => ({
-      id:         m.id,
-      home_team:  m.homeTeam?.name      || m.homeTeam?.shortName  || 'Unknown',
-      away_team:  m.awayTeam?.name      || m.awayTeam?.shortName  || 'Unknown',
-      league:     m.competition?.name   || 'Unknown',
-      status:     m.status,
-      status_time: m.status,
-      start_time: m.utcDate,
-      home_score: m.score?.fullTime?.home ?? null,
-      away_score: m.score?.fullTime?.away ?? null,
-      source:     'football-data',
+      id:          m.id,
+      home_team:   m.homeTeam?.name    || m.homeTeam?.shortName  || 'Unknown',
+      away_team:   m.awayTeam?.name    || m.awayTeam?.shortName  || 'Unknown',
+      league:      m.competition?.name || 'Unknown',
+      status:      m.status,
+      status_time: m.minute ? `${m.minute}'` : null,
+      start_time:  m.utcDate,
+      home_score:  m.score?.fullTime?.home  ?? m.score?.halfTime?.home  ?? null,
+      away_score:  m.score?.fullTime?.away  ?? m.score?.halfTime?.away  ?? null,
+      source:      'football-data',
     }));
 
     console.log(`✅ [Schedule] ${matches.length} fixtures from Football-Data`);
