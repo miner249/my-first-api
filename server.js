@@ -1,15 +1,15 @@
 require('dotenv').config();
 
-const express = require('express');
-const cors    = require('cors');
-const path    = require('path');
+const express      = require('express');
+const cors         = require('cors');
+const path         = require('path');
 const EventEmitter = require('events');
 
 const { getParser, getSupportedPlatforms } = require('./parsers');
-const { createStore }         = require('./database/store');
-const LiveBetEngine           = require('./live_engine/liveBetEngine');
-const liveDataProvider        = require('./live_engine/liveDataProvider');
-const NotificationService     = require('./notifications/notificationService');
+const { createStore }      = require('./database/store');
+const LiveBetEngine        = require('./live_engine/liveBetEngine');
+const liveDataProvider     = require('./live_engine/liveDataProvider');
+const NotificationService  = require('./notifications/notificationService');
 
 const PORT = process.env.PORT || 3000;
 
@@ -33,9 +33,6 @@ async function bootstrap() {
   app.use(express.json());
 
   // ──────────────────────────────────────────────────────────────
-  // Root
-  // ──────────────────────────────────────────────────────────────
-
   // Health
   // ──────────────────────────────────────────────────────────────
   app.get('/health', (_, res) => {
@@ -48,16 +45,25 @@ async function bootstrap() {
   });
 
   // ──────────────────────────────────────────────────────────────
-  // Track a bet
+  // Track a bet  (accepts shareCode OR bookingCode + platform)
   // ──────────────────────────────────────────────────────────────
   app.post('/track-bet', async (req, res) => {
     try {
-      const { bookingCode, platform } = req.body;
+      // Accept either shareCode (frontend) or bookingCode (legacy)
+      const shareCode   = req.body.shareCode   || req.body.bookingCode;
+      const platform    = req.body.platform;
 
-      if (!bookingCode || !platform) {
+      if (!shareCode) {
         return res.status(400).json({
           success: false,
-          error:   'bookingCode and platform are required',
+          error:   'shareCode is required',
+        });
+      }
+
+      if (!platform) {
+        return res.status(400).json({
+          success: false,
+          error:   'platform is required',
         });
       }
 
@@ -69,8 +75,15 @@ async function bootstrap() {
         });
       }
 
-      const selections = await parser.parse(bookingCode);
-      const bet        = await store.insertBet({ bookingCode, platform, selections });
+      console.log(`🔍 [/track-bet] ${platform.toUpperCase()} — ${shareCode}`);
+
+      const selections = await parser.parse(shareCode);
+      const bet        = await store.insertBet({
+        bookingCode: shareCode,
+        shareCode,
+        platform,
+        selections,
+      });
       await store.addEventLog({ event_type: 'bet_tracked', payload: bet });
 
       realtime.emit('bet:tracked', bet);
@@ -86,8 +99,42 @@ async function bootstrap() {
   // List bets
   // ──────────────────────────────────────────────────────────────
   app.get('/bets', async (_, res) => {
-    const bets = await store.getBets();
-    res.json({ success: true, count: bets.length, bets });
+    try {
+      const bets = await store.getBets();
+      res.json({ success: true, count: bets.length, bets });
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // Get single bet by ID
+  // ──────────────────────────────────────────────────────────────
+  app.get('/bets/:id', async (req, res) => {
+    try {
+      const bet = await store.getBetById(req.params.id);
+      if (!bet) {
+        return res.status(404).json({ success: false, error: 'Bet not found' });
+      }
+      res.json({ success: true, bet });
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // Delete a bet
+  // ──────────────────────────────────────────────────────────────
+  app.delete('/bets/:id', async (req, res) => {
+    try {
+      const deleted = await store.deleteBet(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ success: false, error: 'Bet not found' });
+      }
+      res.json({ success: true, message: 'Bet deleted' });
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
   });
 
   // ──────────────────────────────────────────────────────────────
@@ -165,17 +212,15 @@ async function bootstrap() {
       res.write(`data: ${JSON.stringify(payload)}\n\n`);
     };
 
-    const onLive    = (payload) => send('live:update',    payload);
-    const onBet     = (payload) => send('bet:tracked',    payload);
+    const onLive    = (payload) => send('live:update',     payload);
+    const onBet     = (payload) => send('bet:tracked',     payload);
     const onBetLive = (payload) => send('bet:live-update', payload);
 
     realtime.on('live:update',     onLive);
     realtime.on('bet:tracked',     onBet);
     realtime.on('bet:live-update', onBetLive);
 
-    const heartbeat = setInterval(() => {
-      res.write(': heartbeat\n\n');
-    }, 25_000);
+    const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 25_000);
 
     send('ready', { ok: true, timestamp: new Date().toISOString() });
 
@@ -211,7 +256,9 @@ async function bootstrap() {
   app.get('/api/match/:id', async (req, res) => {
     try {
       const snapshot = await liveDataProvider.fetchLiveSnapshot();
-      const match = (snapshot.matches || []).find(m => String(m.id) === String(req.params.id));
+      const match    = (snapshot.matches || []).find(
+        m => String(m.id) === String(req.params.id)
+      );
       if (!match) return res.status(404).json({ success: false, error: 'Match not found' });
       res.json({ success: true, match });
     } catch (e) {
@@ -221,18 +268,27 @@ async function bootstrap() {
 
   app.get('/api/tracked-live-matches', async (_, res) => {
     try {
-      const bets = await store.getBets();
-      const snapshot = await liveDataProvider.fetchLiveSnapshot();
+      const bets        = await store.getBets();
+      const snapshot    = await liveDataProvider.fetchLiveSnapshot();
       const liveMatches = snapshot.matches || [];
+
       const matches = bets.flatMap(bet =>
         (bet.selections || []).map(sel => {
           const live = liveMatches.find(m =>
-            m.home_team?.includes(sel.home_team) || m.away_team?.includes(sel.away_team)
+            m.home_team?.includes(sel.home_team) ||
+            m.away_team?.includes(sel.away_team)
           );
           if (!live) return null;
-          return { shareCode: bet.bookingCode, match: live, marketName: sel.market_name, selection: sel.selection };
+          return {
+            shareCode:  bet.shareCode || bet.bookingCode,
+            platform:   bet.platform,
+            match:      live,
+            marketName: sel.market_name,
+            selection:  sel.selection,
+          };
         }).filter(Boolean)
       );
+
       res.json({ success: true, matches });
     } catch (e) {
       res.status(500).json({ success: false, error: e.message });
