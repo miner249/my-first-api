@@ -35,25 +35,7 @@ async function bootstrap() {
   // ──────────────────────────────────────────────────────────────
   // Root
   // ──────────────────────────────────────────────────────────────
-  app.get('/', (_, res) => {
-    res.json({
-      name:    'TrackIT API',
-      status:  'running',
-      version: '1.0.0',
-      endpoints: {
-        'GET  /':          'This menu',
-        'GET  /health':    'Health check + supported platforms',
-        'GET  /bets':      'List all tracked bets',
-        'GET  /live':      'Current live matches',
-        'GET  /schedule':  'Upcoming fixtures (next 48 h)',
-        'GET  /events':    'SSE stream (live:update, bet:tracked)',
-        'POST /track-bet': '{ bookingCode, platform }',
-        'POST /subscribe': '{ betId, channel, target }',
-      },
-    });
-  });
 
-  // ──────────────────────────────────────────────────────────────
   // Health
   // ──────────────────────────────────────────────────────────────
   app.get('/health', (_, res) => {
