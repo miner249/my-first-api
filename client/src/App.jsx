@@ -8,11 +8,21 @@ import './App.css';
 
 const API_URL = window.location.origin;
 
+const PLATFORMS = [
+  { value: 'sportybet', label: 'SportyBet' },
+  { value: 'bet9ja',    label: 'Bet9ja'    },
+  { value: 'betway',    label: 'Betway'    },
+  { value: 'betking',   label: 'BetKing'   },
+  { value: '1xbet',     label: '1xBet'     },
+  { value: '22bet',     label: '22Bet'     },
+];
+
 function App() {
-  const [shareCode, setShareCode] = useState('');
-  const [message, setMessage] = useState({ text: '', type: '' });
-  const [bets, setBets] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [shareCode, setShareCode]     = useState('');
+  const [platform, setPlatform]       = useState('sportybet');
+  const [message, setMessage]         = useState({ text: '', type: '' });
+  const [bets, setBets]               = useState([]);
+  const [loading, setLoading]         = useState(false);
   const [selectedBet, setSelectedBet] = useState(null);
   const [currentPage, setCurrentPage] = useState('home');
   const [selectedMatchId, setSelectedMatchId] = useState('');
@@ -30,7 +40,7 @@ function App() {
 
   const fetchBets = async () => {
     try {
-      const res = await fetch(`${API_URL}/bets`);
+      const res  = await fetch(`${API_URL}/bets`);
       const data = await res.json();
       setBets(data.bets || []);
     } catch (err) {
@@ -49,14 +59,14 @@ function App() {
 
     try {
       const res = await fetch(`${API_URL}/track-bet`, {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shareCode: shareCode.trim() }),
+        body:    JSON.stringify({ shareCode: shareCode.trim(), platform }),
       });
       const data = await res.json();
 
       if (data.success) {
-        setMessage({ text: `✅ Bet tracked successfully!`, type: 'success' });
+        setMessage({ text: '✅ Bet tracked successfully!', type: 'success' });
         setShareCode('');
         fetchBets();
       } else {
@@ -72,7 +82,7 @@ function App() {
   const handleViewBet = async (id, e) => {
     e?.stopPropagation();
     try {
-      const res = await fetch(`${API_URL}/bets/${id}`);
+      const res  = await fetch(`${API_URL}/bets/${id}`);
       const data = await res.json();
       if (data.success) setSelectedBet(data.bet);
     } catch {
@@ -84,7 +94,7 @@ function App() {
     e?.stopPropagation();
     if (!window.confirm('Delete this bet?')) return;
     try {
-      const res = await fetch(`${API_URL}/bets/${id}`, { method: 'DELETE' });
+      const res  = await fetch(`${API_URL}/bets/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         setMessage({ text: '✅ Bet deleted', type: 'success' });
@@ -96,17 +106,20 @@ function App() {
     }
   };
 
-  const fmt = (n) => `₦${parseFloat(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+  const fmt = (n) =>
+    `₦${parseFloat(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
 
-  // Count live bets for navbar indicator
-  const liveCount = bets.filter(bet => 
+  const selectedPlatformLabel =
+    PLATFORMS.find(p => p.value === platform)?.label || 'Bookmaker';
+
+  const liveCount = bets.filter(bet =>
     bet.matches?.some(m => m.status === 'Live' || m.status === 'IN_PLAY')
   ).length;
 
   return (
     <div className="app">
-      <Navbar 
-        currentPage={currentPage} 
+      <Navbar
+        currentPage={currentPage}
         onNavigate={setCurrentPage}
         liveCount={liveCount}
       />
@@ -114,20 +127,35 @@ function App() {
       <div className="container">
         {currentPage === 'home' && (
           <>
-            {/* Track Bet Section */}
+            {/* ── Track Bet Section ── */}
             <section className="section">
               <div className="track-card card-static">
                 <h2 className="section-title">📋 Track a Bet</h2>
+
                 <form onSubmit={handleSubmit} className="track-form">
-                  <input 
+                  {/* Platform selector */}
+                  <select
+                    value={platform}
+                    onChange={(e) => setPlatform(e.target.value)}
+                    disabled={loading}
+                    className="platform-select"
+                  >
+                    {PLATFORMS.map(p => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
+
+                  {/* Share code input */}
+                  <input
                     type="text"
-                    placeholder="Enter SportyBet share code..."
+                    placeholder={`Enter ${selectedPlatformLabel} share/booking code...`}
                     value={shareCode}
                     onChange={(e) => setShareCode(e.target.value)}
                     disabled={loading}
                     className="track-input"
                   />
-                  <button 
+
+                  <button
                     type="submit"
                     disabled={loading}
                     className="btn btn-primary"
@@ -135,7 +163,7 @@ function App() {
                     {loading ? '🔄 Tracking...' : '+ Track Bet'}
                   </button>
                 </form>
-                
+
                 {message.text && (
                   <div className={`message message-${message.type}`}>
                     {message.text}
@@ -144,7 +172,7 @@ function App() {
               </div>
             </section>
 
-            {/* Stats Section */}
+            {/* ── Stats Section ── */}
             <section className="section">
               <div className="stats-grid grid grid-3">
                 <div className="stat-card card-static">
@@ -153,16 +181,16 @@ function App() {
                 </div>
                 <div className="stat-card card-static">
                   <div className="stat-value text-win">
-                    {bets.reduce((sum, b) => sum + (parseFloat(b.stake) || 0), 0) > 0
-                      ? fmt(bets.reduce((sum, b) => sum + (parseFloat(b.stake) || 0), 0))
+                    {bets.reduce((s, b) => s + (parseFloat(b.stake) || 0), 0) > 0
+                      ? fmt(bets.reduce((s, b) => s + (parseFloat(b.stake) || 0), 0))
                       : '₦0.00'}
                   </div>
                   <div className="stat-label">Total Staked</div>
                 </div>
                 <div className="stat-card card-static">
                   <div className="stat-value" style={{ color: '#FB923C' }}>
-                    {bets.reduce((sum, b) => sum + (parseFloat(b.potential_win) || 0), 0) > 0
-                      ? fmt(bets.reduce((sum, b) => sum + (parseFloat(b.potential_win) || 0), 0))
+                    {bets.reduce((s, b) => s + (parseFloat(b.potential_win) || 0), 0) > 0
+                      ? fmt(bets.reduce((s, b) => s + (parseFloat(b.potential_win) || 0), 0))
                       : '₦0.00'}
                   </div>
                   <div className="stat-label">Potential Win</div>
@@ -170,7 +198,7 @@ function App() {
               </div>
             </section>
 
-            {/* My Bets Section */}
+            {/* ── My Bets Section ── */}
             <section className="section">
               <div className="section-header">
                 <h2 className="section-title">🎯 My Tracked Bets</h2>
@@ -188,14 +216,21 @@ function App() {
               ) : (
                 <div className="bets-list">
                   {bets.map((bet) => (
-                    <div 
+                    <div
                       key={bet.id}
                       className="bet-card card"
                       onClick={(e) => handleViewBet(bet.id, e)}
                     >
                       <div className="bet-card-header">
                         <span className="bet-code">{bet.share_code}</span>
-                        <span className="badge badge-pending">Pending</span>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          {bet.platform && (
+                            <span className="badge badge-platform">
+                              {PLATFORMS.find(p => p.value === bet.platform)?.label || bet.platform}
+                            </span>
+                          )}
+                          <span className="badge badge-pending">Pending</span>
+                        </div>
                       </div>
 
                       <div className="bet-info-grid">
@@ -216,13 +251,13 @@ function App() {
                       </div>
 
                       <div className="bet-actions">
-                        <button 
+                        <button
                           className="btn btn-secondary"
                           onClick={(e) => handleViewBet(bet.id, e)}
                         >
                           View Details
                         </button>
-                        <button 
+                        <button
                           className="btn btn-danger"
                           onClick={(e) => handleDelete(bet.id, e)}
                         >
@@ -247,7 +282,11 @@ function App() {
         )}
         {currentPage === 'scheduled' && selectedMatchId && (
           <>
-            <button className="btn btn-secondary" onClick={() => setSelectedMatchId('')} style={{ marginBottom: '12px' }}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setSelectedMatchId('')}
+              style={{ marginBottom: '12px' }}
+            >
               ← Back to Today Matches
             </button>
             <MatchPage matchId={selectedMatchId} />
@@ -255,7 +294,7 @@ function App() {
         )}
       </div>
 
-      {/* Modal for Bet Details */}
+      {/* ── Bet Details Modal ── */}
       {selectedBet && (
         <div className="modal-overlay" onClick={() => setSelectedBet(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -313,7 +352,7 @@ function App() {
               )}
             </div>
 
-            <button 
+            <button
               onClick={(e) => handleDelete(selectedBet.id, e)}
               className="btn btn-danger"
               style={{ width: '100%', marginTop: '16px' }}
