@@ -1,13 +1,11 @@
 /**
  * database/store.js
- * In-memory store. Swap `createStore()` for the PostgreSQL adapter in production.
- * See database/postgres.schema.sql for the production schema.
  */
 
 const { v4: uuidv4 } = require('uuid');
 
 function createStore() {
-  const bets = [];
+  const bets      = [];
   const eventLogs = [];
 
   return {
@@ -21,34 +19,50 @@ function createStore() {
     // ──────────────────────────────────────────────────────────
     // Bets
     // ──────────────────────────────────────────────────────────
-    async insertBet({ bookingCode, platform, selections }) {
+    async insertBet({ bookingCode, platform, selections, stake, totalOdds, potentialWin, currency }) {
       const bet = {
-        id: uuidv4(),
+        id:            uuidv4(),
+        share_code:    bookingCode,
         bookingCode,
         platform,
+        // Frontend-compatible fields
+        total_odds:    totalOdds    || 0,
+        stake:         stake        || 0,
+        potential_win: potentialWin || 0,
+        currency:      currency     || 'NGN',
+        // Selections stored as both names so both old + new code works
         selections,
-        status: 'pending',   // pending | live | settled
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        matches: selections,        // frontend reads this
+        status:     'pending',
+        created_at:  new Date().toISOString(),
+        createdAt:   new Date().toISOString(),
+        updatedAt:   new Date().toISOString(),
       };
       bets.push(bet);
       return bet;
     },
 
     async getBets() {
-      return [...bets].reverse();   // newest first
+      return [...bets].reverse();
     },
 
     async getBetById(id) {
-      return bets.find((b) => b.id === id) || null;
+      return bets.find((b) => b.id === String(id)) || null;
     },
 
     async updateBetStatus(id, status) {
-      const bet = bets.find((b) => b.id === id);
+      const bet = bets.find((b) => b.id === String(id));
       if (!bet) return null;
-      bet.status = status;
+      bet.status    = status;
       bet.updatedAt = new Date().toISOString();
       return bet;
+    },
+
+    async deleteBet(id) {
+      const index = bets.findIndex((b) => b.id === String(id));
+      if (index === -1) return null;
+      const [deleted] = bets.splice(index, 1);
+      return deleted;
     },
 
     // ──────────────────────────────────────────────────────────
@@ -61,11 +75,11 @@ function createStore() {
     },
 
     // ──────────────────────────────────────────────────────────
-    // Event log (audit trail)
+    // Event log
     // ──────────────────────────────────────────────────────────
     async addEventLog({ event_type, payload }) {
       const entry = {
-        id: uuidv4(),
+        id:        uuidv4(),
         event_type,
         payload,
         createdAt: new Date().toISOString(),
