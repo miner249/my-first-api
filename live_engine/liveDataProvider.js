@@ -6,23 +6,33 @@ const fetch = require('node-fetch');
 const { getLiveMatches, findMatch, getMatchStats } = require('../live_engine/liveTracker');
 
 // ──────────────────────────────────────────────────────────────
-// Server-side cache — shared across ALL users
+// Server-side cache
 // ──────────────────────────────────────────────────────────────
 const cache = {
   live: {
-    data:      null,
-    fetchedAt: 0,
-    ttl:       30_000,   // 30 seconds — live data changes fast
+    data:          null,
+    fetchedAt:     0,
+    ttl:           30_000,    // 30 seconds
+    rateLimitedAt: 0,
+    rateLimitTtl:  120_000,   // wait 2 minutes after rate limit before retrying
   },
   schedule: {
-    data:      null,
-    fetchedAt: 0,
-    ttl:       60_000,   // 60 seconds — schedule changes slowly
+    data:          null,
+    fetchedAt:     0,
+    ttl:           90_000,    // 90 seconds — safe for free tier (10 req/min)
+    rateLimitedAt: 0,
+    rateLimitTtl:  120_000,
   },
 };
 
 function isCacheValid(entry) {
-  return entry.data !== null && (Date.now() - entry.fetchedAt) < entry.ttl;
+  if (!entry.data) return false;
+  return (Date.now() - entry.fetchedAt) < entry.ttl;
+}
+
+function isRateLimited(entry) {
+  if (!entry.rateLimitedAt) return false;
+  return (Date.now() - entry.rateLimitedAt) < entry.rateLimitTtl;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -38,55 +48,65 @@ function stamp(matches, source) {
 }
 
 // ──────────────────────────────────────────────────────────────
-// Live snapshot  (Apify → Football-Data fallback)
+// Live snapshot
 // ──────────────────────────────────────────────────────────────
 async function fetchLiveSnapshot() {
-  // Return cache if still valid — same data for all users
   if (isCacheValid(cache.live)) {
-    console.log(`💾 [Cache] Live — serving cached data (${Math.round((Date.now() - cache.live.fetchedAt) / 1000)}s old)`);
+    const age = Math.round((Date.now() - cache.live.fetchedAt) / 1000);
+    console.log(`💾 [Cache] Live — ${age}s old, TTL ${cache.live.ttl / 1000}s`);
     return cache.live.data;
   }
 
   console.log('🔄 [Live] Cache expired — fetching fresh data...');
 
-  const { matches, source } = await getLiveMatches();
+  try {
+    const { matches, source } = await getLiveMatches();
 
-  const normalized = (matches || []).map(m => ({
-    id:          m.eventId    || m.id,
-    home_team:   m.home_team  || m.home  || 'Unknown',
-    away_team:   m.away_team  || m.away  || 'Unknown',
-    league:      m.league     || 'Unknown',
-    status:      m.status,
-    status_time: m.status_time || m.status,
-    home_score:  m.homeScore  ?? m.home_score ?? null,
-    away_score:  m.awayScore  ?? m.away_score ?? null,
-    start_time:  m.startTime  || m.start_time || null,
-    history:     m.history    || [],
-    stats:       m.stats      || {},
-    source:      m.source     || source,
-  }));
+    const normalized = (matches || []).map(m => ({
+      id:          m.eventId    || m.id,
+      home_team:   m.home_team  || m.home  || 'Unknown',
+      away_team:   m.away_team  || m.away  || 'Unknown',
+      league:      m.league     || 'Unknown',
+      status:      m.status,
+      status_time: m.status_time || m.status,
+      home_score:  m.homeScore  ?? m.home_score ?? null,
+      away_score:  m.awayScore  ?? m.away_score ?? null,
+      start_time:  m.startTime  || m.start_time || null,
+      history:     m.history    || [],
+      stats:       m.stats      || {},
+      source:      m.source     || source,
+    }));
 
-  const result = stamp(normalized, source);
+    const result = stamp(normalized, source);
 
-  // Store in cache — all users will get this until TTL expires
-  cache.live.data      = result;
-  cache.live.fetchedAt = Date.now();
+    cache.live.data      = result;
+    cache.live.fetchedAt = Date.now();
 
-  console.log(`✅ [Live] Cached ${normalized.length} matches for ${cache.live.ttl / 1000}s`);
-  return result;
+    console.log(`✅ [Live] Cached ${normalized.length} matches`);
+    return result;
+
+  } catch (error) {
+    console.error('❌ [Live] Error:', error.message);
+    return cache.live.data || stamp([], 'error');
+  }
 }
 
 // ──────────────────────────────────────────────────────────────
-// Schedule snapshot  (Football-Data)
+// Schedule snapshot
 // ──────────────────────────────────────────────────────────────
 async function fetchScheduleSnapshot() {
-  // Return cache if still valid
   if (isCacheValid(cache.schedule)) {
-    console.log(`💾 [Cache] Schedule — serving cached data (${Math.round((Date.now() - cache.schedule.fetchedAt) / 1000)}s old)`);
+    const age = Math.round((Date.now() - cache.schedule.fetchedAt) / 1000);
+    console.log(`💾 [Cache] Schedule — ${age}s old, TTL ${cache.schedule.ttl / 1000}s`);
     return cache.schedule.data;
   }
 
-  console.log('🔄 [Schedule] Cache expired — fetching fresh data...');
+  // If rate limited recently, serve stale data but DON'T reset the cache timer
+  if (isRateLimited(cache.schedule)) {
+    const wait = Math.round((cache.schedule.rateLimitTtl - (Date.now() - cache.schedule.rateLimitedAt)) / 1000);
+    console.warn(`⏳ [Schedule] Rate limited — waiting ${wait}s before retry, serving stale data`);
+    return cache.schedule.data || stamp([], 'rate-limited');
+  }
 
   const FOOTBALL_DATA_API_KEY = process.env.FOOTBALL_DATA_API_KEY;
 
@@ -108,20 +128,17 @@ async function fetchScheduleSnapshot() {
       headers: { 'X-Auth-Token': FOOTBALL_DATA_API_KEY },
     });
 
+    // Rate limited — mark it but DO NOT reset fetchedAt
     if (response.status === 429) {
-      console.warn('⚠️  [Schedule] Rate limit hit — extending cache TTL');
-      // If we have stale data, keep serving it rather than returning empty
-      if (cache.schedule.data) {
-        cache.schedule.fetchedAt = Date.now(); // reset timer to avoid hammering
-        return cache.schedule.data;
-      }
-      return stamp([], 'rate-limited');
+      console.warn('⚠️  [Schedule] Rate limited by Football-Data');
+      cache.schedule.rateLimitedAt = Date.now();
+      // Serve stale data if we have it, otherwise empty
+      return cache.schedule.data || stamp([], 'rate-limited');
     }
 
     if (!response.ok) {
       console.error(`❌ [Schedule] HTTP ${response.status}`);
-      if (cache.schedule.data) return cache.schedule.data; // serve stale on error
-      return stamp([], 'error');
+      return cache.schedule.data || stamp([], 'error');
     }
 
     const data = await response.json();
@@ -141,17 +158,17 @@ async function fetchScheduleSnapshot() {
 
     const result = stamp(matches, 'football-data');
 
-    // Store in cache
-    cache.schedule.data      = result;
-    cache.schedule.fetchedAt = Date.now();
+    // Update cache and clear any rate limit flag
+    cache.schedule.data          = result;
+    cache.schedule.fetchedAt     = Date.now();
+    cache.schedule.rateLimitedAt = 0;
 
-    console.log(`✅ [Schedule] Cached ${matches.length} fixtures for ${cache.schedule.ttl / 1000}s`);
+    console.log(`✅ [Schedule] Cached ${matches.length} fixtures`);
     return result;
 
   } catch (error) {
     console.error('❌ [Schedule] Error:', error.message);
-    if (cache.schedule.data) return cache.schedule.data; // serve stale on error
-    return stamp([], 'error');
+    return cache.schedule.data || stamp([], 'error');
   }
 }
 
