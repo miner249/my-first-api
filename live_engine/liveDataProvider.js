@@ -14,6 +14,7 @@ const cache = {
     ttl:           30_000,
     rateLimitedAt: 0,
     rateLimitTtl:  120_000,
+    fetching:      false,
   },
   schedule: {
     data:          null,
@@ -21,6 +22,7 @@ const cache = {
     ttl:           90_000,
     rateLimitedAt: 0,
     rateLimitTtl:  120_000,
+    fetching:      false,
   },
 };
 
@@ -100,7 +102,59 @@ function mapMatch(m) {
 }
 
 // ──────────────────────────────────────────────────────────────
-// Schedule snapshot  (all matches today + tomorrow)
+// Live snapshot
+// ──────────────────────────────────────────────────────────────
+async function fetchLiveSnapshot() {
+  if (isCacheValid(cache.live)) {
+    const age = Math.round((Date.now() - cache.live.fetchedAt) / 1000);
+    console.log(`💾 [Cache] Live — ${age}s old`);
+    return cache.live.data;
+  }
+
+  if (isRateLimited(cache.live)) {
+    const wait = Math.round((cache.live.rateLimitTtl - (Date.now() - cache.live.rateLimitedAt)) / 1000);
+    console.warn(`⏳ [Live] Rate limited — ${wait}s remaining`);
+    return cache.live.data || stamp([], 'rate-limited');
+  }
+
+  // Lock — prevent simultaneous requests from both hitting Football-Data
+  if (cache.live.fetching) {
+    console.log('⏳ [Live] Fetch already in progress — returning current cache');
+    return cache.live.data || stamp([], 'none');
+  }
+
+  cache.live.fetching = true;
+  console.log('🔄 [Live] Fetching live matches from Football-Data...');
+
+  try {
+    const { error, data } = await fetchFromFootballData('/matches?status=LIVE');
+
+    if (error === 'RATE_LIMITED') {
+      cache.live.rateLimitedAt = Date.now();
+      return cache.live.data || stamp([], 'rate-limited');
+    }
+
+    if (error || !data) {
+      return cache.live.data || stamp([], 'error');
+    }
+
+    const matches = (data.matches || []).map(mapMatch);
+    const result  = stamp(matches, 'football-data');
+
+    cache.live.data          = result;
+    cache.live.fetchedAt     = Date.now();
+    cache.live.rateLimitedAt = 0;
+
+    console.log(`✅ [Live] Cached ${matches.length} live matches`);
+    return result;
+
+  } finally {
+    cache.live.fetching = false;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Schedule snapshot
 // ──────────────────────────────────────────────────────────────
 async function fetchScheduleSnapshot() {
   if (isCacheValid(cache.schedule)) {
@@ -115,92 +169,46 @@ async function fetchScheduleSnapshot() {
     return cache.schedule.data || stamp([], 'rate-limited');
   }
 
+  // Lock — prevent simultaneous requests
+  if (cache.schedule.fetching) {
+    console.log('⏳ [Schedule] Fetch already in progress — returning current cache');
+    return cache.schedule.data || stamp([], 'none');
+  }
+
+  cache.schedule.fetching = true;
+
   const today    = new Date().toISOString().split('T')[0];
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 2);
   const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
-  const { error, data } = await fetchFromFootballData(
-    `/matches?dateFrom=${today}&dateTo=${tomorrowStr}`
-  );
+  try {
+    const { error, data } = await fetchFromFootballData(
+      `/matches?dateFrom=${today}&dateTo=${tomorrowStr}`
+    );
 
-  if (error === 'RATE_LIMITED') {
-    cache.schedule.rateLimitedAt = Date.now();
-    return cache.schedule.data || stamp([], 'rate-limited');
-  }
+    if (error === 'RATE_LIMITED') {
+      cache.schedule.rateLimitedAt = Date.now();
+      return cache.schedule.data || stamp([], 'rate-limited');
+    }
 
-  if (error || !data) {
-    return cache.schedule.data || stamp([], 'error');
-  }
+    if (error || !data) {
+      return cache.schedule.data || stamp([], 'error');
+    }
 
-  const matches = (data.matches || []).map(mapMatch);
-  const result  = stamp(matches, 'football-data');
+    const matches = (data.matches || []).map(mapMatch);
+    const result  = stamp(matches, 'football-data');
 
-  cache.schedule.data          = result;
-  cache.schedule.fetchedAt     = Date.now();
-  cache.schedule.rateLimitedAt = 0;
+    cache.schedule.data          = result;
+    cache.schedule.fetchedAt     = Date.now();
+    cache.schedule.rateLimitedAt = 0;
 
-  console.log(`✅ [Schedule] Cached ${matches.length} fixtures`);
-  return result;
-}
-
-// ──────────────────────────────────────────────────────────────
-// Live snapshot  — derived from schedule + separate live call
-// No Apify needed. Uses schedule cache to avoid extra API calls.
-// ──────────────────────────────────────────────────────────────
-async function fetchLiveSnapshot() {
-  if (isCacheValid(cache.live)) {
-    const age = Math.round((Date.now() - cache.live.fetchedAt) / 1000);
-    console.log(`💾 [Cache] Live — ${age}s old`);
-    return cache.live.data;
-  }
-
-  console.log('🔄 [Live] Fetching live matches from Football-Data...');
-
-  // Step 1 — get schedule (uses cache if available, saves quota)
-  const schedule = await fetchScheduleSnapshot();
-
-  // Step 2 — filter for IN_PLAY and PAUSED from schedule cache
-  const liveFromSchedule = (schedule.matches || []).filter(
-    m => m.status === 'IN_PLAY' || m.status === 'PAUSED'
-  );
-
-  // Step 3 — if schedule has live matches, use them directly (no extra API call)
-  if (liveFromSchedule.length > 0) {
-    console.log(`✅ [Live] ${liveFromSchedule.length} live matches from schedule cache`);
-    const result = stamp(liveFromSchedule, 'football-data');
-    cache.live.data      = result;
-    cache.live.fetchedAt = Date.now();
+    console.log(`✅ [Schedule] Cached ${matches.length} fixtures`);
     return result;
+
+  } finally {
+    cache.schedule.fetching = false;
   }
-
-  // Step 4 — schedule cache might be stale, do a direct live call
-  if (isRateLimited(cache.live)) {
-    const wait = Math.round((cache.live.rateLimitTtl - (Date.now() - cache.live.rateLimitedAt)) / 1000);
-    console.warn(`⏳ [Live] Rate limited — ${wait}s remaining`);
-    return cache.live.data || stamp([], 'rate-limited');
-  }
-
-  const { error, data } = await fetchFromFootballData('/matches?status=LIVE');
-
-  if (error === 'RATE_LIMITED') {
-    cache.live.rateLimitedAt = Date.now();
-    return cache.live.data || stamp([], 'rate-limited');
-  }
-
-  if (error || !data) {
-    return cache.live.data || stamp([], 'error');
-  }
-
-  const matches = (data.matches || []).map(mapMatch);
-  const result  = stamp(matches, 'football-data');
-
-  cache.live.data          = result;
-  cache.live.fetchedAt     = Date.now();
-  cache.live.rateLimitedAt = 0;
-
-  console.log(`✅ [Live] Cached ${matches.length} live matches`);
-  return result;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -217,7 +225,7 @@ async function findMatch(homeTeam, awayTeam) {
     const mHome = normalize(m.home_team);
     const mAway = normalize(m.away_team);
     return (
-      (mHome === tHome && mAway === tAway) ||
+      (mHome === tHome       && mAway === tAway) ||
       (mHome.includes(tHome) && mAway.includes(tAway)) ||
       (tHome.includes(mHome) && tAway.includes(mAway))
     );
@@ -227,7 +235,7 @@ async function findMatch(homeTeam, awayTeam) {
 }
 
 // ──────────────────────────────────────────────────────────────
-// Get match stats  (basic — Football-Data doesn't give deep stats)
+// Get match stats
 // ──────────────────────────────────────────────────────────────
 async function getMatchStats(matchId) {
   const { error, data } = await fetchFromFootballData(`/matches/${matchId}`);
